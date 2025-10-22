@@ -92,4 +92,4 @@ def _create_gameplan_yaml(config_file: Path) -> None:
     }
 
     with open(config_file, "w") as f:
-        yaml.dump(config, f, default_flow_style=False, sort_keys=False)
+        yaml.dump(config, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
