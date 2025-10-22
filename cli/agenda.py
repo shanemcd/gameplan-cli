@@ -247,3 +247,44 @@ def _update_command_section(content: str, section: Dict[str, Any]) -> str:
     updated = re.sub(pattern, replacement, content, flags=re.DOTALL)
 
     return updated
+
+
+def format_tracked_items(base_path: Optional[Path] = None) -> str:
+    """Format tracked items from gameplan.yaml.
+
+    Simple output of tracked Jira items for use in AGENDA.md.
+
+    Args:
+        base_path: Base directory (default: current directory)
+
+    Returns:
+        Markdown-formatted tracked items
+    """
+    if base_path is None:
+        base_path = Path.cwd()
+
+    config_file = base_path / "gameplan.yaml"
+    if not config_file.exists():
+        return "_No gameplan.yaml found_"
+
+    with open(config_file) as f:
+        config = yaml.safe_load(f)
+
+    areas = config.get("areas", {})
+    items_md = []
+
+    # Jira items
+    jira_area = areas.get("jira", {})
+    jira_items = jira_area.get("items", [])
+
+    for item in jira_items:
+        issue_key = item.get("issue")
+        if not issue_key:
+            continue
+
+        items_md.append(f"- {issue_key}")
+
+    if not items_md:
+        return "_No tracked items_"
+
+    return "\n".join(items_md)

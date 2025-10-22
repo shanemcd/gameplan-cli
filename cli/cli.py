@@ -3,7 +3,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from cli import agenda, init
+from cli import agenda, init, sync
 
 
 def cmd_init(args):
@@ -46,6 +46,9 @@ def cmd_agenda(args):
         elif args.agenda_command == "refresh":
             agenda.refresh_agenda()
             print("✅ Refreshed AGENDA.md")
+        elif args.agenda_command == "tracked-items":
+            output = agenda.format_tracked_items()
+            print(output)
         else:
             print("Unknown agenda command", file=sys.stderr)
             sys.exit(1)
@@ -58,6 +61,30 @@ def cmd_agenda(args):
     except ValueError as e:
         print(f"❌ {e}", file=sys.stderr)
         sys.exit(1)
+    except Exception as e:
+        print(f"❌ Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+def cmd_sync(args):
+    """Execute sync command."""
+    try:
+        base_path = Path.cwd()
+        source = args.source if hasattr(args, 'source') else None
+
+        if source == "jira":
+            print("=" * 60)
+            print("Jira Activity Sync")
+            print("=" * 60)
+            print()
+            sync.sync_jira(base_path)
+        else:
+            # Sync all (currently just Jira)
+            print("=" * 60)
+            print("Syncing All Adapters")
+            print("=" * 60)
+            print()
+            sync.sync_all(base_path)
     except Exception as e:
         print(f"❌ Error: {e}", file=sys.stderr)
         sys.exit(1)
@@ -125,6 +152,26 @@ def main():
         help="Refresh command-driven sections in AGENDA.md",
     )
     refresh_parser.set_defaults(func=cmd_agenda)
+
+    # agenda tracked-items
+    tracked_items_parser = agenda_subparsers.add_parser(
+        "tracked-items",
+        help="Format tracked items from gameplan.yaml",
+    )
+    tracked_items_parser.set_defaults(func=cmd_agenda)
+
+    # Sync command
+    sync_parser = subparsers.add_parser(
+        "sync",
+        help="Sync activity feeds from external systems",
+    )
+    sync_parser.add_argument(
+        "source",
+        nargs="?",
+        choices=["jira"],
+        help="Source to sync (default: all)",
+    )
+    sync_parser.set_defaults(func=cmd_sync)
 
     args = parser.parse_args()
 

@@ -10,10 +10,17 @@ Requires:
 import json
 import re
 import subprocess
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from cli.adapters.base import Adapter, ItemData, TrackedItem, sanitize_title_for_path
+
+try:
+    import pypandoc
+    PANDOC_AVAILABLE = True
+except ImportError:
+    PANDOC_AVAILABLE = False
 
 
 class JiraAdapter(Adapter):
@@ -55,13 +62,13 @@ class JiraAdapter(Adapter):
             since: Optional timestamp (not used for Jira currently)
 
         Returns:
-            ItemData with title, status, and raw Jira data
+            ItemData with title, status, and raw Jira data including comments
         """
-        issue_key = item.metadata["issue"]
+        issue_key = item.metadata.get("issue") or item.id
         env = item.metadata.get("env", "prod")
 
-        # Call jirahhh view command
-        cmd = ["jirahhh", "view", issue_key, "--env", env, "--json"]
+        # Call jirahhh API to get full issue data
+        cmd = ["jirahhh", "api", "GET", f"/rest/api/2/issue/{issue_key}", "--env", env]
 
         result = subprocess.run(
             cmd,
@@ -71,16 +78,61 @@ class JiraAdapter(Adapter):
         )
 
         if result.returncode != 0:
-            raise RuntimeError(
-                f"Failed to fetch Jira issue {issue_key}: {result.stderr}"
+            # Return empty data on error
+            return ItemData(
+                title="",
+                status="",
+                raw_data={}
             )
 
         # Parse JSON response
-        jira_data = json.loads(result.stdout)
+        try:
+            jira_data = json.loads(result.stdout)
+        except json.JSONDecodeError:
+            return ItemData(
+                title="",
+                status="",
+                raw_data={}
+            )
+
+        # Extract fields
+        title = ""
+        status = ""
+
+        if "fields" in jira_data:
+            # JSON format from Jira API
+            fields = jira_data["fields"]
+            title = fields.get("summary", "")
+            status_obj = fields.get("status", {})
+            status = status_obj.get("name", "") if isinstance(status_obj, dict) else str(status_obj)
+        else:
+            # Fallback
+            title = jira_data.get("summary", "")
+            status = jira_data.get("status", "")
+
+        # Fetch comments
+        comments_cmd = ["jirahhh", "api", "GET", f"/rest/api/2/issue/{issue_key}/comment", "--env", env]
+
+        comments_result = subprocess.run(
+            comments_cmd,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+
+        comments_data = {}
+        if comments_result.returncode == 0:
+            try:
+                comments_data = json.loads(comments_result.stdout)
+            except json.JSONDecodeError:
+                pass
+
+        # Add comments to raw data
+        jira_data["comments"] = comments_data
 
         return ItemData(
-            title=jira_data.get("summary", ""),
-            status=jira_data.get("status", "Unknown"),
+            title=title,
+            status=status,
             raw_data=jira_data,
         )
 
@@ -173,7 +225,7 @@ class JiraAdapter(Adapter):
     ) -> str:
         """Update existing README.md content.
 
-        Updates Status and Assignee fields while preserving manual content.
+        Updates Status, Assignee, and Activity Log while preserving manual content.
 
         Args:
             content: Current README content
@@ -199,4 +251,160 @@ class JiraAdapter(Adapter):
             content,
         )
 
+        # Update Activity Log section with comments
+        content = self._update_activity_log(content, data)
+
         return content
+
+    def _convert_jira_to_markdown(self, jira_text: str) -> str:
+        """Convert Jira wiki markup to markdown.
+
+        Args:
+            jira_text: Text in Jira wiki markup format
+
+        Returns:
+            Text converted to markdown format
+        """
+        if not PANDOC_AVAILABLE or not jira_text:
+            return jira_text
+
+        try:
+            # Use pypandoc to convert from jira to gfm (GitHub-flavored markdown)
+            return pypandoc.convert_text(jira_text, "gfm", format="jira")
+        except Exception:
+            # If conversion fails, return original text
+            return jira_text
+
+    def _update_activity_log(self, content: str, data: ItemData) -> str:
+        """Update the Activity Log section with comments from Jira.
+
+        Args:
+            content: Current README content
+            data: ItemData with comments
+
+        Returns:
+            Updated content with Activity Log populated
+        """
+        # Find Activity Log section
+        activity_log_pattern = re.compile(
+            r"^## Activity Log\s*\n.*?(?=\n## |\Z)",
+            re.MULTILINE | re.DOTALL
+        )
+
+        match = activity_log_pattern.search(content)
+        if not match:
+            # No Activity Log section found
+            return content
+
+        # Extract comments
+        comments_data = data.raw_data.get("comments", {})
+        all_comments = comments_data.get("comments", [])
+
+        if not all_comments:
+            # No comments, use placeholder
+            activity_log = "## Activity Log\n\n*(Auto-synced from Jira)*\n"
+        else:
+            # Build activity log with comments
+            activity_log = "## Activity Log\n\n*(Auto-synced from Jira)*\n\n"
+
+            # Reverse to show most recent first
+            for comment in reversed(all_comments):
+                author = comment.get("author", {})
+                author_name = author.get("displayName", "Unknown")
+                created = comment.get("created", "")
+                body = comment.get("body", "").strip()
+
+                # Convert Jira markup to markdown
+                body = self._convert_jira_to_markdown(body)
+
+                # Format timestamp
+                if created:
+                    try:
+                        dt = datetime.fromisoformat(created.replace("Z", "+00:00"))
+                        created = dt.strftime("%Y-%m-%d %H:%M UTC")
+                    except Exception:
+                        pass
+
+                # Add comment entry
+                activity_log += f"### {author_name} - {created}\n\n"
+                activity_log += f"{body}\n\n"
+                activity_log += "---\n\n"
+
+        # Replace the Activity Log section
+        return activity_log_pattern.sub(activity_log.rstrip() + "\n", content)
+
+    def _get_metadata_path(self, readme_path: Path) -> Path:
+        """Get the metadata file path for a given README path."""
+        return readme_path.parent / ".metadata.json"
+
+    def load_metadata(self, readme_path: Path) -> Dict[str, Any]:
+        """Load previous metadata for an issue.
+
+        Args:
+            readme_path: Path to the README file
+
+        Returns:
+            Dictionary with previous metadata, empty dict if none exists
+        """
+        metadata_path = self._get_metadata_path(readme_path)
+        if not metadata_path.exists():
+            return {}
+
+        try:
+            with open(metadata_path, "r") as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError):
+            return {}
+
+    def save_metadata(self, readme_path: Path, data: ItemData) -> None:
+        """Save current metadata for an issue.
+
+        Args:
+            readme_path: Path to the README file
+            data: ItemData containing current state
+        """
+        metadata_path = self._get_metadata_path(readme_path)
+
+        metadata = {
+            "last_sync": datetime.utcnow().isoformat(),
+        }
+
+        # Extract updated timestamp from raw data
+        if "fields" in data.raw_data:
+            fields = data.raw_data["fields"]
+            metadata["updated"] = fields.get("updated")
+
+        try:
+            with open(metadata_path, "w") as f:
+                json.dump(metadata, f, indent=2)
+        except IOError:
+            pass
+
+    def detect_changes(self, readme_path: Path, data: ItemData) -> bool:
+        """Detect if issue has been updated since last sync.
+
+        Args:
+            readme_path: Path to the README file
+            data: ItemData with current state
+
+        Returns:
+            True if issue was updated, False otherwise
+        """
+        prev_metadata = self.load_metadata(readme_path)
+
+        if not prev_metadata:
+            # First sync, no previous data
+            return False
+
+        # Check if updated timestamp changed
+        prev_updated = prev_metadata.get("updated")
+        current_updated = None
+        if "fields" in data.raw_data:
+            current_updated = data.raw_data["fields"].get("updated")
+
+        # Return True if timestamps differ
+        return (
+            prev_updated is not None
+            and current_updated is not None
+            and prev_updated != current_updated
+        )
