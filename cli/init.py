@@ -69,27 +69,53 @@ def _create_gameplan_yaml(config_file: Path) -> None:
     Args:
         config_file: Path to the gameplan.yaml file to create
     """
-    config = {
-        "areas": {
-            "jira": {
-                "items": [],
-            },
-        },
-        "agenda": {
-            "sections": [
-                {
-                    "name": "Focus & Priorities",
-                    "emoji": "🎯",
-                    "description": "What's urgent/important today",
-                },
-                {
-                    "name": "Notes",
-                    "emoji": "📔",
-                    "description": "Thoughts and observations",
-                },
-            ],
-        },
-    }
+    template = """\
+# Gameplan Configuration
+# Track work items and generate daily AGENDA.md
+
+# Areas: Define what you want to track
+areas:
+  jira:
+    # Add Jira issues you're actively working on
+    items: []
+    # Example:
+    # items:
+    #   - issue: PROJ-123
+    #     env: prod
+    #   - issue: PROJ-456
+    #     env: staging
+
+# Agenda: Configure your daily AGENDA.md file
+agenda:
+  sections:
+    # Manual sections: You edit the content directly in AGENDA.md
+    - name: Focus & Priorities
+      emoji: 🎯
+      description: What's urgent/important today
+
+    # Command-driven sections: Auto-populated by running a command
+    # Uncomment to enable tracked items section:
+    # - name: Tracked Items
+    #   emoji: 🔄
+    #   command: gameplan agenda tracked-items
+    #   description: Current status of tracked items
+
+    # You can add custom command-driven sections:
+    # - name: Calendar
+    #   emoji: 📅
+    #   command: your-calendar-command
+    #   description: Today's meetings
+    #
+    # - name: Pull Requests
+    #   emoji: 📝
+    #   command: your-pr-command
+    #   description: PRs awaiting review
+
+    # Manual section for notes
+    - name: Notes
+      emoji: 📔
+      description: Thoughts and observations
+"""
 
     with open(config_file, "w") as f:
-        yaml.dump(config, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+        f.write(template)
