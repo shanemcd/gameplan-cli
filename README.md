@@ -4,8 +4,8 @@
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-76%20passing-brightgreen.svg)](tests/)
-[![Coverage](https://img.shields.io/badge/coverage-89--100%25-brightgreen.svg)](htmlcov/)
+[![Tests](https://img.shields.io/badge/tests-126%20passing-brightgreen.svg)](tests/)
+[![Coverage](https://img.shields.io/badge/coverage-90%25-brightgreen.svg)](htmlcov/)
 
 **Gameplan** helps you track work items across external systems (Jira, with GitHub and others coming soon) using local markdown files and a pluggable adapter architecture. All data lives locally in human-readable files that you control.
 
@@ -16,7 +16,7 @@
 - 🏠 **Local-first**: All data in markdown files, version controlled with git
 - 🔌 **Pluggable adapters**: Easy integration with any tracking system
 - 📅 **Smart agenda**: Configurable daily agenda with command-driven sections
-- 🧪 **Test-driven**: 76 tests with 89-100% coverage on core modules
+- 🧪 **Test-driven**: 126 tests with 90% coverage (exceeds 85% target)
 - 📝 **Markdown-based**: Human-readable, greppable, no vendor lock-in
 - 🤖 **AI-friendly**: Comprehensive documentation for AI assistants
 
@@ -321,21 +321,23 @@ See **[CONTRIBUTING.md](CONTRIBUTING.md)** for detailed guidelines.
 
 ## 🗺️ Roadmap
 
-### Completed (Phase 1-5) ✅
+### Completed (Phase 1-6) ✅
 
 - ✅ Base adapter interface with ABC
 - ✅ `gameplan init` command
 - ✅ Agenda system (init, view, refresh)
 - ✅ Jira adapter with change detection and Activity Log
 - ✅ `gameplan sync` command
-- ✅ Rich tracked items formatting
-- ✅ CLI integration
-- ✅ 76 tests, 89-100% coverage
+- ✅ Rich tracked items formatting with status emojis
+- ✅ CLI integration with full command routing
+- ✅ Comprehensive documentation (README, ARCHITECTURE, CONTRIBUTING)
+- ✅ 126 tests, 90% coverage (exceeds 85% target)
 
-### Next Steps (Phase 6-7) ⏳
+### Next Steps (Phase 7) ⏳
 
-- ⏳ **Phase 6**: Documentation polish
-- ⏳ **Phase 7**: Release prep (CI/CD, PyPI publishing)
+- ✅ **GitHub Actions CI**: Automated testing on push/PR
+- ⏳ **v0.1.0 Release**: Tag and prepare for public release
+- ⏳ **PyPI Publishing**: Make installable via `pip install gameplan-cli` (optional)
 
 ### Future Enhancements
 
