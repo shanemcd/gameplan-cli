@@ -128,11 +128,14 @@ def refresh_agenda(base_path: Optional[Path] = None) -> Path:
 
     content = agenda_file.read_text()
 
+    # Update date header to today
+    content = _update_date_header(content)
+
     # Update command-driven sections
     sections = config.get("agenda", {}).get("sections", [])
     for section in sections:
         if "command" in section:
-            content = _update_command_section(content, section)
+            content = _update_command_section(content, section, base_path)
 
     # Write updated content
     agenda_file.write_text(content)
@@ -160,6 +163,26 @@ def _generate_agenda_content(agenda_config: Dict[str, Any]) -> str:
         lines.append("")  # Blank line between sections
 
     return "\n".join(lines)
+
+
+def _update_date_header(content: str) -> str:
+    """Update the date header in AGENDA.md to today's date.
+
+    Args:
+        content: Current AGENDA.md content
+
+    Returns:
+        Updated content with today's date
+    """
+    today = datetime.now().strftime("%A, %B %d, %Y")
+    new_header = f"# Agenda - {today}"
+
+    # Pattern to match: # Agenda - [any date]
+    pattern = r"^# Agenda - .*$"
+
+    updated = re.sub(pattern, new_header, content, count=1, flags=re.MULTILINE)
+
+    return updated
 
 
 def _generate_section(section: Dict[str, Any]) -> List[str]:
@@ -194,12 +217,13 @@ def _generate_section(section: Dict[str, Any]) -> List[str]:
     return lines
 
 
-def _update_command_section(content: str, section: Dict[str, Any]) -> str:
+def _update_command_section(content: str, section: Dict[str, Any], base_path: Path) -> str:
     """Update a command-driven section with command output.
 
     Args:
         content: Current AGENDA.md content
         section: Section configuration with 'command' field
+        base_path: Base directory to run command from
 
     Returns:
         Updated AGENDA.md content
@@ -218,20 +242,31 @@ def _update_command_section(content: str, section: Dict[str, Any]) -> str:
     # Pattern: ## Header\n[Run: command] OR ## Header\n(existing content)
     # Replace with: ## Header\n(command output)
 
-    # Run the command
+    # Run the command from the base directory
     try:
+        import os
+        env = os.environ.copy()
+        env["GAMEPLAN_BASE_DIR"] = str(base_path)
+
         result = subprocess.run(
             command,
             shell=True,
             capture_output=True,
             text=True,
             timeout=30,
+            cwd=str(base_path),
+            env=env,
         )
 
         if result.returncode == 0:
             output = result.stdout.strip()
         else:
-            output = "[Error running command: Command failed]"
+            # Include stderr in error for debugging
+            stderr = result.stderr.strip() if result.stderr else ""
+            if stderr:
+                output = f"[Error running command: Command failed]\n{stderr}"
+            else:
+                output = "[Error running command: Command failed]"
     except subprocess.TimeoutExpired:
         output = "[Error running command: Timeout]"
     except Exception as e:
@@ -250,15 +285,13 @@ def _update_command_section(content: str, section: Dict[str, Any]) -> str:
 
 
 def format_tracked_items(base_path: Optional[Path] = None) -> str:
-    """Format tracked items from gameplan.yaml.
-
-    Simple output of tracked Jira items for use in AGENDA.md.
+    """Format tracked items with current status and preserved Actions/Notes.
 
     Args:
         base_path: Base directory (default: current directory)
 
     Returns:
-        Markdown-formatted tracked items
+        Markdown-formatted tracked items with status, Actions, and Notes
     """
     if base_path is None:
         base_path = Path.cwd()
@@ -269,6 +302,12 @@ def format_tracked_items(base_path: Optional[Path] = None) -> str:
 
     with open(config_file) as f:
         config = yaml.safe_load(f)
+
+    # Read current AGENDA.md to extract existing Actions/Notes
+    agenda_file = base_path / "AGENDA.md"
+    existing_subsections = {}
+    if agenda_file.exists():
+        existing_subsections = _extract_tracked_item_subsections(agenda_file.read_text())
 
     areas = config.get("areas", {})
     items_md = []
@@ -282,9 +321,175 @@ def format_tracked_items(base_path: Optional[Path] = None) -> str:
         if not issue_key:
             continue
 
-        items_md.append(f"- {issue_key}")
+        # Read status from tracking file
+        status_info = _read_jira_status(base_path, issue_key)
+
+        # Generate item markdown
+        item_md = _format_single_tracked_item(
+            issue_key,
+            status_info,
+            existing_subsections.get(issue_key, {})
+        )
+        items_md.append(item_md)
 
     if not items_md:
         return "_No tracked items_"
 
     return "\n".join(items_md)
+
+
+def _extract_tracked_item_subsections(content: str) -> Dict[str, Dict[str, str]]:
+    """Extract Actions and Notes subsections for each tracked item from AGENDA.md.
+
+    Args:
+        content: Current AGENDA.md content
+
+    Returns:
+        Dict mapping issue keys to their Actions/Notes content
+    """
+    result = {}
+
+    # Pattern to match tracked items: ### [ISSUE-KEY] Title
+    item_pattern = r"###\s+\[([A-Z]+-\d+)\][^\n]*\n"
+
+    # Find all tracked items
+    matches = list(re.finditer(item_pattern, content))
+
+    for i, match in enumerate(matches):
+        issue_key = match.group(1)
+
+        # Extract content from this heading to the next ### or ## heading (or end)
+        start = match.end()
+        if i + 1 < len(matches):
+            end = matches[i + 1].start()
+        else:
+            # Look for next ## heading
+            next_section = re.search(r"\n##\s", content[start:])
+            end = start + next_section.start() if next_section else len(content)
+
+        item_content = content[start:end]
+
+        # Extract Actions subsection
+        actions_match = re.search(
+            r"####\s+Actions\s*\n(.*?)(?=####\s+Notes|###\s+\[|##\s+|$)",
+            item_content,
+            re.DOTALL
+        )
+        actions = actions_match.group(1).strip() if actions_match else ""
+
+        # Extract Notes subsection
+        notes_match = re.search(
+            r"####\s+Notes\s*\n(.*?)(?=###\s+\[|##\s+|$)",
+            item_content,
+            re.DOTALL
+        )
+        notes = notes_match.group(1).strip() if notes_match else ""
+
+        result[issue_key] = {
+            "actions": actions,
+            "notes": notes
+        }
+
+    return result
+
+
+def _read_jira_status(base_path: Path, issue_key: str) -> Dict[str, str]:
+    """Read status information for a Jira issue from tracking files.
+
+    Args:
+        base_path: Base directory
+        issue_key: Jira issue key
+
+    Returns:
+        Dict with 'status', 'title', 'assignee' keys
+    """
+    # Find the tracking directory for this issue
+    jira_dir = base_path / "tracking" / "areas" / "jira"
+    if not jira_dir.exists():
+        return {"status": "Unknown", "title": "", "assignee": ""}
+
+    # Find directory matching this issue key
+    for item_dir in jira_dir.iterdir():
+        if item_dir.is_dir() and item_dir.name.startswith(f"{issue_key}-"):
+            readme = item_dir / "README.md"
+            if readme.exists():
+                content = readme.read_text()
+
+                # Extract title from # heading
+                title_match = re.search(r"^#\s+[A-Z]+-\d+:\s+(.+)$", content, re.MULTILINE)
+                title = title_match.group(1) if title_match else ""
+
+                # Extract status
+                status_match = re.search(r"\*\*Status\*\*:\s+(.+)$", content, re.MULTILINE)
+                status = status_match.group(1) if status_match else "Unknown"
+
+                # Extract assignee
+                assignee_match = re.search(r"\*\*Assignee\*\*:\s+(.+)$", content, re.MULTILINE)
+                assignee = assignee_match.group(1) if assignee_match else ""
+
+                return {"status": status, "title": title, "assignee": assignee}
+
+    return {"status": "Unknown", "title": "", "assignee": ""}
+
+
+def _format_single_tracked_item(
+    issue_key: str,
+    status_info: Dict[str, str],
+    subsections: Dict[str, str]
+) -> str:
+    """Format a single tracked item with status and subsections.
+
+    Args:
+        issue_key: Jira issue key
+        status_info: Dict with status, title, assignee
+        subsections: Dict with actions and notes content
+
+    Returns:
+        Markdown for the tracked item
+    """
+    status = status_info.get("status", "Unknown")
+    title = status_info.get("title", "")
+
+    # Map status to emoji
+    status_emoji = {
+        "In Progress": "🟢",
+        "Refinement": "❓",
+        "To Do": "⚪",
+        "Done": "✅",
+        "Blocked": "🔴",
+    }.get(status, "⚪")
+
+    lines = []
+
+    # Heading
+    if title:
+        lines.append(f"### [{issue_key}] {title}")
+    else:
+        lines.append(f"### [{issue_key}]")
+
+    lines.append("")
+
+    # Status line
+    jira_url = f"https://issues.redhat.com/browse/{issue_key}"
+    lines.append(f"**[{issue_key}]({jira_url})** {status_emoji} {status}")
+    lines.append("")
+
+    # Actions subsection
+    lines.append("#### Actions")
+    lines.append("")
+    if subsections.get("actions"):
+        lines.append(subsections["actions"])
+    else:
+        lines.append("No pending actions")
+    lines.append("")
+
+    # Notes subsection
+    lines.append("#### Notes")
+    lines.append("")
+    if subsections.get("notes"):
+        lines.append(subsections["notes"])
+    else:
+        lines.append("[Add notes, context, and links here]")
+    lines.append("")
+
+    return "\n".join(lines)
