@@ -23,7 +23,23 @@
 
 ## 🚀 Quick Start
 
-### Installation
+### Try It Now (No Installation)
+
+Run gameplan directly from GitHub using `uvx`:
+
+```bash
+# Run any gameplan command without cloning
+uvx --from git+https://github.com/shanemcd/gameplan-cli gameplan --help
+
+# Initialize a new gameplan
+uvx --from git+https://github.com/shanemcd/gameplan-cli gameplan init
+
+# Create and view your agenda
+uvx --from git+https://github.com/shanemcd/gameplan-cli gameplan agenda init
+uvx --from git+https://github.com/shanemcd/gameplan-cli gameplan agenda view
+```
+
+### Installation (For Development)
 
 ```bash
 # Clone the repository
@@ -33,15 +49,15 @@ cd gameplan-cli
 # Install dependencies
 uv sync
 
-# Verify installation
+# Run gameplan
 uv run gameplan --help
 ```
 
 ### Initialize Your Gameplan
 
 ```bash
-# Create a new gameplan repository
-uv run gameplan init
+# Create a new gameplan repository (use uvx --from or uv run)
+gameplan init
 
 # This creates:
 # - gameplan.yaml (configuration)
@@ -81,13 +97,13 @@ agenda:
 
 ```bash
 # Initialize AGENDA.md
-uv run gameplan agenda init
+gameplan agenda init
 
 # View your agenda
-uv run gameplan agenda view
+gameplan agenda view
 
 # Update command-driven sections
-uv run gameplan agenda refresh
+gameplan agenda refresh
 ```
 
 ---
@@ -116,20 +132,20 @@ gameplan sync jira                # Sync Jira only
 ```bash
 # 1. Initialize your gameplan
 cd ~/projects
-uv run gameplan init
+gameplan init
 
 # 2. Configure your items to track (edit gameplan.yaml)
 #    Add Jira issues, configure agenda sections
 
 # 3. Create your daily agenda
-uv run gameplan agenda init
+gameplan agenda init
 
 # 4. Work throughout the day
 #    - Edit AGENDA.md to add focus items, notes
 #    - Run `gameplan agenda refresh` to update calendar/commands
 
 # 5. Sync Jira data
-uv run gameplan sync jira
+gameplan sync jira
 ```
 
 ---
