@@ -387,3 +387,304 @@ Manual content here
 
         updated_content = (temp_dir / "AGENDA.md").read_text()
         assert "[Error running command]" in updated_content or "Command failed" in updated_content
+
+
+class TestFormatTrackedItems:
+    """Test format_tracked_items function."""
+
+    def test_format_tracked_items_returns_message_if_no_config(self, temp_dir):
+        """format_tracked_items returns message if gameplan.yaml missing."""
+        from cli.agenda import format_tracked_items
+
+        result = format_tracked_items(temp_dir)
+
+        assert result == "_No gameplan.yaml found_"
+
+    def test_format_tracked_items_returns_message_if_no_items(self, temp_dir):
+        """format_tracked_items returns message if no tracked items."""
+        from cli.agenda import format_tracked_items
+
+        config_file = temp_dir / "gameplan.yaml"
+        config_file.write_text("""
+areas:
+  jira:
+    items: []
+""")
+
+        result = format_tracked_items(temp_dir)
+
+        assert result == "_No tracked items_"
+
+    def test_format_tracked_items_reads_from_tracking_files(self, temp_dir):
+        """format_tracked_items reads status from tracking README files."""
+        from cli.agenda import format_tracked_items
+
+        # Create config
+        config_file = temp_dir / "gameplan.yaml"
+        config_file.write_text("""
+areas:
+  jira:
+    items:
+      - issue: PROJ-123
+        env: prod
+""")
+
+        # Create tracking file
+        tracking_dir = temp_dir / "tracking/areas/jira/PROJ-123-test-issue"
+        tracking_dir.mkdir(parents=True)
+        readme = tracking_dir / "README.md"
+        readme.write_text("""# PROJ-123: Test Issue
+
+**Status**: In Progress
+**Assignee**: testuser
+
+## Overview
+Test content
+""")
+
+        result = format_tracked_items(temp_dir)
+
+        assert "[PROJ-123] Test Issue" in result
+        assert "🟢 In Progress" in result
+
+    def test_format_tracked_items_preserves_actions_from_agenda(self, temp_dir):
+        """format_tracked_items preserves Actions subsection from AGENDA.md."""
+        from cli.agenda import format_tracked_items
+
+        # Create config
+        config_file = temp_dir / "gameplan.yaml"
+        config_file.write_text("""
+areas:
+  jira:
+    items:
+      - issue: PROJ-123
+        env: prod
+""")
+
+        # Create tracking file
+        tracking_dir = temp_dir / "tracking/areas/jira/PROJ-123-test-issue"
+        tracking_dir.mkdir(parents=True)
+        readme = tracking_dir / "README.md"
+        readme.write_text("""# PROJ-123: Test Issue
+
+**Status**: In Progress
+**Assignee**: testuser
+""")
+
+        # Create AGENDA.md with Actions
+        agenda_file = temp_dir / "AGENDA.md"
+        agenda_file.write_text("""# Agenda
+
+## Tracked Items
+
+### [PROJ-123] Test Issue
+
+**PROJ-123** 🟢 In Progress
+
+#### Actions
+
+- [ ] Review PR
+- [ ] Update docs
+
+#### Notes
+
+Some notes here
+""")
+
+        result = format_tracked_items(temp_dir)
+
+        assert "- [ ] Review PR" in result
+        assert "- [ ] Update docs" in result
+        assert "Some notes here" in result
+
+    def test_format_tracked_items_handles_multiple_status_emojis(self, temp_dir):
+        """format_tracked_items uses correct emoji for each status."""
+        from cli.agenda import format_tracked_items
+
+        # Create config with multiple items
+        config_file = temp_dir / "gameplan.yaml"
+        config_file.write_text("""
+areas:
+  jira:
+    items:
+      - issue: PROJ-1
+      - issue: PROJ-2
+      - issue: PROJ-3
+      - issue: PROJ-4
+      - issue: PROJ-5
+""")
+
+        # Create tracking files with different statuses
+        for issue_num, status in [
+            ("1", "In Progress"),
+            ("2", "Refinement"),
+            ("3", "To Do"),
+            ("4", "Done"),
+            ("5", "Blocked"),
+        ]:
+            tracking_dir = temp_dir / f"tracking/areas/jira/PROJ-{issue_num}-issue"
+            tracking_dir.mkdir(parents=True)
+            readme = tracking_dir / "README.md"
+            readme.write_text(f"""# PROJ-{issue_num}: Issue
+
+**Status**: {status}
+**Assignee**: test
+""")
+
+        result = format_tracked_items(temp_dir)
+
+        assert "🟢 In Progress" in result
+        assert "❓ Refinement" in result
+        assert "⚪ To Do" in result
+        assert "✅ Done" in result
+        assert "🔴 Blocked" in result
+
+
+class TestExtractTrackedItemSubsections:
+    """Test _extract_tracked_item_subsections helper."""
+
+    def test_extract_subsections_from_agenda(self, temp_dir):
+        """_extract_tracked_item_subsections extracts Actions and Notes."""
+        from cli.agenda import _extract_tracked_item_subsections
+
+        content = """# Agenda
+
+## Tracked Items
+
+### [PROJ-123] Test Issue
+
+**PROJ-123** 🟢 In Progress
+
+#### Actions
+
+- [ ] Task 1
+- [ ] Task 2
+
+#### Notes
+
+Some important notes
+
+### [PROJ-456] Another Issue
+
+**PROJ-456** ❓ Refinement
+
+#### Actions
+
+- Different actions
+
+#### Notes
+
+Different notes
+"""
+
+        result = _extract_tracked_item_subsections(content)
+
+        assert "PROJ-123" in result
+        assert "Task 1" in result["PROJ-123"]["actions"]
+        assert "Task 2" in result["PROJ-123"]["actions"]
+        assert "important notes" in result["PROJ-123"]["notes"]
+
+        assert "PROJ-456" in result
+        assert "Different actions" in result["PROJ-456"]["actions"]
+        assert "Different notes" in result["PROJ-456"]["notes"]
+
+    def test_extract_subsections_handles_missing_sections(self):
+        """_extract_tracked_item_subsections handles missing Actions/Notes."""
+        from cli.agenda import _extract_tracked_item_subsections
+
+        content = """# Agenda
+
+### [PROJ-123] Test
+
+**PROJ-123** 🟢 In Progress
+
+Some content but no subsections
+"""
+
+        result = _extract_tracked_item_subsections(content)
+
+        assert result["PROJ-123"]["actions"] == ""
+        assert result["PROJ-123"]["notes"] == ""
+
+
+class TestReadJiraStatus:
+    """Test _read_jira_status helper."""
+
+    def test_read_jira_status_from_readme(self, temp_dir):
+        """_read_jira_status reads status from tracking README."""
+        from cli.agenda import _read_jira_status
+
+        tracking_dir = temp_dir / "tracking/areas/jira/PROJ-123-test-issue"
+        tracking_dir.mkdir(parents=True)
+        readme = tracking_dir / "README.md"
+        readme.write_text("""# PROJ-123: Test Issue
+
+**Status**: In Progress
+**Assignee**: John Doe
+""")
+
+        result = _read_jira_status(temp_dir, "PROJ-123")
+
+        assert result["status"] == "In Progress"
+        assert result["title"] == "Test Issue"
+        assert result["assignee"] == "John Doe"
+
+    def test_read_jira_status_returns_unknown_if_not_found(self, temp_dir):
+        """_read_jira_status returns Unknown if tracking file not found."""
+        from cli.agenda import _read_jira_status
+
+        result = _read_jira_status(temp_dir, "NONEXISTENT-1")
+
+        assert result["status"] == "Unknown"
+        assert result["title"] == ""
+
+
+class TestFormatSingleTrackedItem:
+    """Test _format_single_tracked_item helper."""
+
+    def test_format_single_item_with_status_emoji(self):
+        """_format_single_tracked_item includes status emoji."""
+        from cli.agenda import _format_single_tracked_item
+
+        status_info = {"status": "In Progress", "title": "Test Issue", "assignee": ""}
+        subsections = {"actions": "", "notes": ""}
+
+        result = _format_single_tracked_item("PROJ-123", status_info, subsections)
+
+        assert "### [PROJ-123] Test Issue" in result
+        assert "🟢 In Progress" in result
+
+    def test_format_single_item_preserves_actions(self):
+        """_format_single_tracked_item preserves Actions subsection."""
+        from cli.agenda import _format_single_tracked_item
+
+        status_info = {"status": "In Progress", "title": "Test", "assignee": ""}
+        subsections = {"actions": "- [ ] Task 1\n- [ ] Task 2", "notes": ""}
+
+        result = _format_single_tracked_item("PROJ-1", status_info, subsections)
+
+        assert "- [ ] Task 1" in result
+        assert "- [ ] Task 2" in result
+
+    def test_format_single_item_preserves_notes(self):
+        """_format_single_tracked_item preserves Notes subsection."""
+        from cli.agenda import _format_single_tracked_item
+
+        status_info = {"status": "Done", "title": "Test", "assignee": ""}
+        subsections = {"actions": "", "notes": "Important context here"}
+
+        result = _format_single_tracked_item("PROJ-1", status_info, subsections)
+
+        assert "Important context here" in result
+
+    def test_format_single_item_uses_default_placeholders(self):
+        """_format_single_tracked_item uses defaults if subsections empty."""
+        from cli.agenda import _format_single_tracked_item
+
+        status_info = {"status": "To Do", "title": "Test", "assignee": ""}
+        subsections = {"actions": "", "notes": ""}
+
+        result = _format_single_tracked_item("PROJ-1", status_info, subsections)
+
+        assert "Add your next actions here" in result
+        assert "[Add context, observations, or reminders here]" in result
