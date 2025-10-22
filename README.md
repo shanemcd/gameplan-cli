@@ -7,7 +7,7 @@
 [![Tests](https://img.shields.io/badge/tests-76%20passing-brightgreen.svg)](tests/)
 [![Coverage](https://img.shields.io/badge/coverage-89--100%25-brightgreen.svg)](htmlcov/)
 
-**Gameplan** helps you track work items across multiple external systems (Jira, GitHub, Linear, etc.) using local markdown files and a pluggable adapter architecture. All data lives locally in human-readable files that you control.
+**Gameplan** helps you track work items across external systems (Jira, with GitHub and others coming soon) using local markdown files and a pluggable adapter architecture. All data lives locally in human-readable files that you control.
 
 ---
 
@@ -107,7 +107,7 @@ gameplan agenda init              # Create AGENDA.md
 gameplan agenda view              # Display current agenda
 gameplan agenda refresh           # Update command-driven sections
 
-# Sync adapters (coming soon - Phase 5)
+# Sync tracked items
 gameplan sync                     # Sync all configured adapters
 gameplan sync jira                # Sync Jira only
 ```
@@ -129,7 +129,7 @@ uv run gameplan agenda init
 #    - Edit AGENDA.md to add focus items, notes
 #    - Run `gameplan agenda refresh` to update calendar/commands
 
-# 5. Sync Jira data (when Phase 5 is complete)
+# 5. Sync Jira data
 uv run gameplan sync jira
 ```
 
@@ -256,7 +256,7 @@ Gameplan uses a pluggable adapter architecture. Each adapter integrates with an 
            env: "prod"
    ```
 
-4. **Sync** (when Phase 5 is complete):
+4. **Sync**:
    ```bash
    gameplan sync jira
    ```
@@ -322,19 +322,20 @@ See **[CONTRIBUTING.md](CONTRIBUTING.md)** for detailed guidelines.
 
 ## 🗺️ Roadmap
 
-### Completed (Phase 1-4) ✅
+### Completed (Phase 1-5) ✅
 
 - ✅ Base adapter interface with ABC
 - ✅ `gameplan init` command
 - ✅ Agenda system (init, view, refresh)
-- ✅ Jira adapter
+- ✅ Jira adapter with change detection and Activity Log
+- ✅ `gameplan sync` command
+- ✅ Rich tracked items formatting
 - ✅ CLI integration
 - ✅ 76 tests, 89-100% coverage
 
-### Next Steps (Phase 5-7) ⏳
+### Next Steps (Phase 6-7) ⏳
 
-- ⏳ **Phase 5**: Sync orchestration (`gameplan sync` command)
-- ⏳ **Phase 6**: Documentation (you are here!)
+- ⏳ **Phase 6**: Documentation polish
 - ⏳ **Phase 7**: Release prep (CI/CD, PyPI publishing)
 
 ### Future Enhancements
