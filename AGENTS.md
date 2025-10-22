@@ -8,7 +8,7 @@ This is the AI assistant reference guide for the **gameplan-cli** project - a lo
 
 ## Project Overview
 
-**Gameplan** is a CLI tool that helps users track work items across multiple external systems (Jira, GitHub, Linear, etc.) using local markdown files and a pluggable adapter architecture.
+**Gameplan** is a CLI tool that helps users track work items across external systems (Jira, with GitHub and others coming soon) using local markdown files and a pluggable adapter architecture.
 
 ### Core Principles
 
@@ -407,25 +407,39 @@ uv run ruff check --fix cli/ tests/
   - Base adapter interface (Adapter ABC, TrackedItem, ItemData)
   - Project structure and configuration
   - Test infrastructure
-  - Coverage: 89%
 
 - **Phase 2: Init Command**
   - `gameplan init` command
   - Directory scaffolding (tracking/areas/)
-  - gameplan.yaml generation
-  - Coverage: 100% on init.py, 93% overall
+  - gameplan.yaml generation with helpful comments
+
+- **Phase 3: Agenda System**
+  - `gameplan agenda init/view/refresh` commands
+  - Command-driven and manual sections
+  - Date header updates
+
+- **Phase 4: Jira Adapter**
+  - Full Jira integration via jirahhh CLI
+  - README.md creation and updates
+  - Manual content preservation
+
+- **Phase 5: Sync Orchestration**
+  - `gameplan sync` command
+  - Change detection with metadata
+  - Activity Log for issue updates
+  - Rich tracked items formatting
+
+**Test Coverage**: 76 tests, 89-100% coverage on core modules
 
 ### In Progress (Current: 🚧)
 
-Check PROJECT_PLAN.md for current phase.
+- Phase 6: Documentation polish for public release
 
 ### Upcoming (Planned: ⏳)
 
-- Phase 3: Agenda System (simplified)
-- Phase 4: Jira Adapter
-- Phase 5: Sync Orchestration
-- Phase 6: Documentation
-- Phase 7: Release Prep
+- Phase 7: Release prep (CI/CD, PyPI publishing)
+- GitHub adapter
+- Advanced agenda features
 
 ---
 
@@ -566,4 +580,4 @@ Update AGENTS.md when:
 ---
 
 *Last updated: 2025-10-22*
-*Project status: Phase 2 complete, Phase 3 next*
+*Project status: Phase 1-5 complete, Phase 6 (documentation) in progress*
