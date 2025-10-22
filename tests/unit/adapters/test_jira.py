@@ -84,17 +84,25 @@ class TestJiraFetchItemData:
 
     @patch("subprocess.run")
     def test_fetch_item_data_calls_jirahhh(self, mock_run, temp_dir):
-        """fetch_item_data calls jirahhh view command."""
-        # Mock jirahhh response
-        mock_run.return_value = MagicMock(
-            returncode=0,
-            stdout=json.dumps({
-                "key": "PROJ-123",
-                "summary": "Test Issue",
-                "status": "In Progress",
-                "assignee": "testuser"
-            })
-        )
+        """fetch_item_data calls jirahhh API commands."""
+        # Mock jirahhh responses (issue data and comments)
+        mock_run.side_effect = [
+            MagicMock(
+                returncode=0,
+                stdout=json.dumps({
+                    "fields": {
+                        "summary": "Test Issue",
+                        "status": {"name": "In Progress"},
+                        "assignee": {"displayName": "testuser"},
+                        "updated": "2025-01-01T00:00:00.000+0000"
+                    }
+                })
+            ),
+            MagicMock(
+                returncode=0,
+                stdout=json.dumps({"comments": []})
+            )
+        ]
 
         adapter = JiraAdapter({}, temp_dir)
         item = TrackedItem(
@@ -105,12 +113,13 @@ class TestJiraFetchItemData:
 
         data = adapter.fetch_item_data(item)
 
-        # Verify jirahhh was called
-        mock_run.assert_called_once()
-        call_args = mock_run.call_args
-        assert "jirahhh" in call_args[0][0]
-        assert "view" in call_args[0][0]
-        assert "PROJ-123" in call_args[0][0]
+        # Verify jirahhh was called twice (issue + comments)
+        assert mock_run.call_count == 2
+        # Check first call is for issue data
+        assert "jirahhh" in mock_run.call_args_list[0][0][0]
+        assert "/rest/api/2/issue/PROJ-123" in mock_run.call_args_list[0][0][0]
+        # Check second call is for comments
+        assert "/rest/api/2/issue/PROJ-123/comment" in mock_run.call_args_list[1][0][0]
 
     @patch("subprocess.run")
     def test_fetch_item_data_returns_item_data(self, mock_run, temp_dir):
