@@ -4,8 +4,7 @@
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-126%20passing-brightgreen.svg)](tests/)
-[![Coverage](https://img.shields.io/badge/coverage-90%25-brightgreen.svg)](htmlcov/)
+[![Tests](https://github.com/shanemcd/gameplan-cli/actions/workflows/test.yml/badge.svg)](https://github.com/shanemcd/gameplan-cli/actions)
 
 **Gameplan** helps you track work items across external systems (Jira, with GitHub and others coming soon) using local markdown files and a pluggable adapter architecture. All data lives locally in human-readable files that you control.
 
