@@ -182,7 +182,7 @@ def test_feature_does_something(temp_dir, sample_config):
 
 ## Adding a New Adapter
 
-This is a complete TDD guide for creating a new adapter (e.g., GitHub, Linear, etc.).
+This is a complete TDD guide for creating a new adapter (e.g., GitHub, etc.).
 
 ### Step 1: Write Tests First (RED Phase)
 
@@ -521,9 +521,9 @@ uv run pytest tests/unit/adapters/test_myadapter.py --cov=cli.adapters.myadapter
 
 **Target**: 90%+ coverage for adapters.
 
-### Step 4: Integration (Phase 5)
+### Step 4: Integration
 
-Once sync orchestration is implemented, register your adapter:
+Register your adapter with the sync orchestration:
 
 ```python
 # In cli/adapters/__init__.py or sync.py
