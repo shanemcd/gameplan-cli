@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "Apache-2.0" }
 authors = [
-    { name = "Shane McDonald", email = "shanemcd@redhat.com" }
+    { name = "Shane McDonald", email = "me@shanemcd.com" }
 ]
 keywords = ["productivity", "tracking", "markdown", "cli", "workflow"]
 classifiers = [
@@ -37,10 +37,10 @@ dev = [
 gameplan = "cli.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/shanemcd/gameplan"
-Documentation = "https://github.com/shanemcd/gameplan#readme"
-Repository = "https://github.com/shanemcd/gameplan"
-Issues = "https://github.com/shanemcd/gameplan/issues"
+Homepage = "https://github.com/shanemcd/gameplan-cli"
+Documentation = "https://github.com/shanemcd/gameplan-cli#readme"
+Repository = "https://github.com/shanemcd/gameplan-cli"
+Issues = "https://github.com/shanemcd/gameplan-cli/issues"
 
 [build-system]
 requires = ["hatchling"]
