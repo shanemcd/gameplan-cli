@@ -1,15 +1,31 @@
 """Main CLI entry point for gameplan."""
 import argparse
+import os
 import sys
 from pathlib import Path
 
 from cli import agenda, init, sync
 
 
+def get_base_path() -> Path:
+    """Get the base path for gameplan operations.
+
+    Checks GAMEPLAN_BASE_DIR environment variable first (for wrapper usage),
+    falls back to current directory.
+
+    Returns:
+        Path to use as base directory
+    """
+    base_dir = os.environ.get("GAMEPLAN_BASE_DIR")
+    if base_dir:
+        return Path(base_dir)
+    return Path.cwd()
+
+
 def cmd_init(args):
     """Execute init command."""
     try:
-        target_dir = Path(args.directory) if args.directory else None
+        target_dir = Path(args.directory) if args.directory else get_base_path()
         result = init.init_gameplan(target_dir=target_dir, interactive=args.interactive)
         print(f"✨ Initialized gameplan at {result}")
         print()
@@ -32,8 +48,10 @@ def cmd_init(args):
 def cmd_agenda(args):
     """Execute agenda subcommands."""
     try:
+        base_path = get_base_path()
+
         if args.agenda_command == "init":
-            agenda.init_agenda()
+            agenda.init_agenda(base_path=base_path)
             print("✅ Created AGENDA.md")
             print()
             print("📋 Next steps:")
@@ -41,13 +59,13 @@ def cmd_agenda(args):
             print("   2. Run: gameplan agenda refresh (to update command sections)")
             print("   3. Run: gameplan agenda view (to display)")
         elif args.agenda_command == "view":
-            content = agenda.view_agenda()
+            content = agenda.view_agenda(base_path=base_path)
             print(content)
         elif args.agenda_command == "refresh":
-            agenda.refresh_agenda()
+            agenda.refresh_agenda(base_path=base_path)
             print("✅ Refreshed AGENDA.md")
         elif args.agenda_command == "tracked-items":
-            output = agenda.format_tracked_items()
+            output = agenda.format_tracked_items(base_path=base_path)
             print(output)
         else:
             print("Unknown agenda command", file=sys.stderr)
@@ -69,7 +87,7 @@ def cmd_agenda(args):
 def cmd_sync(args):
     """Execute sync command."""
     try:
-        base_path = Path.cwd()
+        base_path = get_base_path()
         source = args.source if hasattr(args, 'source') else None
 
         if source == "jira":
