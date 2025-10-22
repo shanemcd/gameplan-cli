@@ -359,3 +359,352 @@ This is manually written context that should be preserved.
         # But status/assignee should be updated
         assert "In Progress" in content
         assert "johndoe" in content
+
+
+class TestJiraErrorHandling:
+    """Test error handling in Jira adapter."""
+
+    @patch("subprocess.run")
+    def test_fetch_item_data_handles_command_failure(self, mock_run, temp_dir):
+        """fetch_item_data returns empty ItemData if jirahhh command fails."""
+        mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="Error")
+
+        adapter = JiraAdapter({}, temp_dir)
+        item = TrackedItem(id="PROJ-123", adapter="jira", metadata={"issue": "PROJ-123", "env": "prod"})
+
+        data = adapter.fetch_item_data(item)
+
+        assert data.title == ""
+        assert data.status == ""
+        assert data.raw_data == {}
+
+    @patch("subprocess.run")
+    def test_fetch_item_data_handles_json_decode_error(self, mock_run, temp_dir):
+        """fetch_item_data handles invalid JSON response."""
+        mock_run.return_value = MagicMock(returncode=0, stdout="not valid json")
+
+        adapter = JiraAdapter({}, temp_dir)
+        item = TrackedItem(id="PROJ-123", adapter="jira", metadata={"issue": "PROJ-123", "env": "prod"})
+
+        data = adapter.fetch_item_data(item)
+
+        assert data.title == ""
+        assert data.status == ""
+        assert data.raw_data == {}
+
+    @patch("subprocess.run")
+    def test_fetch_item_data_handles_comments_json_error(self, mock_run, temp_dir):
+        """fetch_item_data handles invalid JSON from comments endpoint."""
+        mock_run.side_effect = [
+            MagicMock(
+                returncode=0,
+                stdout=json.dumps({
+                    "fields": {
+                        "summary": "Test Issue",
+                        "status": {"name": "Open"}
+                    }
+                })
+            ),
+            MagicMock(returncode=0, stdout="invalid json")
+        ]
+
+        adapter = JiraAdapter({}, temp_dir)
+        item = TrackedItem(id="PROJ-123", adapter="jira", metadata={"issue": "PROJ-123", "env": "prod"})
+
+        data = adapter.fetch_item_data(item)
+
+        assert data.title == "Test Issue"
+        assert data.status == "Open"
+        # Comments should be empty dict due to JSON error
+        assert data.raw_data.get("comments") == {}
+
+
+class TestJiraMetadata:
+    """Test metadata handling for change detection."""
+
+    def test_get_metadata_path(self, temp_dir):
+        """_get_metadata_path returns correct path."""
+        adapter = JiraAdapter({}, temp_dir)
+        readme_path = temp_dir / "tracking/areas/jira/PROJ-123/README.md"
+
+        metadata_path = adapter._get_metadata_path(readme_path)
+
+        assert metadata_path == temp_dir / "tracking/areas/jira/PROJ-123/.metadata.json"
+
+    def test_save_metadata_creates_file(self, temp_dir):
+        """save_metadata creates .metadata.json file."""
+        adapter = JiraAdapter({}, temp_dir)
+        readme_path = temp_dir / "tracking/areas/jira/PROJ-123/README.md"
+        readme_path.parent.mkdir(parents=True)
+
+        data = ItemData(
+            title="Test Issue",
+            status="Open",
+            raw_data={"fields": {"updated": "2025-01-15T10:00:00.000+0000"}}
+        )
+
+        adapter.save_metadata(readme_path, data)
+
+        metadata_path = readme_path.parent / ".metadata.json"
+        assert metadata_path.exists()
+
+    def test_save_metadata_includes_timestamps(self, temp_dir):
+        """save_metadata includes last_sync and updated timestamps."""
+        adapter = JiraAdapter({}, temp_dir)
+        readme_path = temp_dir / "tracking/areas/jira/PROJ-123/README.md"
+        readme_path.parent.mkdir(parents=True)
+
+        data = ItemData(
+            title="Test Issue",
+            status="Open",
+            raw_data={"fields": {"updated": "2025-01-15T10:00:00.000+0000"}}
+        )
+
+        adapter.save_metadata(readme_path, data)
+
+        metadata_path = readme_path.parent / ".metadata.json"
+        with open(metadata_path) as f:
+            metadata = json.load(f)
+
+        assert "last_sync" in metadata
+        assert metadata["updated"] == "2025-01-15T10:00:00.000+0000"
+
+    def test_save_metadata_handles_io_error(self, temp_dir):
+        """save_metadata handles IOError gracefully."""
+        adapter = JiraAdapter({}, temp_dir)
+        # Path that doesn't exist and can't be created
+        readme_path = temp_dir / "nonexistent/dir/README.md"
+
+        data = ItemData(title="Test", status="Open", raw_data={})
+
+        # Should not raise exception
+        adapter.save_metadata(readme_path, data)
+
+    def test_load_metadata_returns_dict(self, temp_dir):
+        """load_metadata returns metadata dict."""
+        adapter = JiraAdapter({}, temp_dir)
+        readme_path = temp_dir / "tracking/areas/jira/PROJ-123/README.md"
+        readme_path.parent.mkdir(parents=True)
+
+        # Save metadata first
+        metadata_path = readme_path.parent / ".metadata.json"
+        with open(metadata_path, "w") as f:
+            json.dump({"last_sync": "2025-01-15", "updated": "2025-01-14"}, f)
+
+        result = adapter.load_metadata(readme_path)
+
+        assert result["last_sync"] == "2025-01-15"
+        assert result["updated"] == "2025-01-14"
+
+    def test_load_metadata_returns_empty_if_missing(self, temp_dir):
+        """load_metadata returns empty dict if file doesn't exist."""
+        adapter = JiraAdapter({}, temp_dir)
+        readme_path = temp_dir / "tracking/areas/jira/PROJ-123/README.md"
+
+        result = adapter.load_metadata(readme_path)
+
+        assert result == {}
+
+    def test_load_metadata_handles_corrupt_json(self, temp_dir):
+        """load_metadata returns empty dict if JSON is corrupt."""
+        adapter = JiraAdapter({}, temp_dir)
+        readme_path = temp_dir / "tracking/areas/jira/PROJ-123/README.md"
+        readme_path.parent.mkdir(parents=True)
+
+        # Create corrupt metadata file
+        metadata_path = readme_path.parent / ".metadata.json"
+        metadata_path.write_text("not valid json")
+
+        result = adapter.load_metadata(readme_path)
+
+        assert result == {}
+
+
+class TestJiraChangeDetection:
+    """Test change detection logic."""
+
+    def test_detect_changes_returns_false_on_first_sync(self, temp_dir):
+        """detect_changes returns False if no previous metadata."""
+        adapter = JiraAdapter({}, temp_dir)
+        readme_path = temp_dir / "tracking/areas/jira/PROJ-123/README.md"
+
+        data = ItemData(
+            title="Test",
+            status="Open",
+            raw_data={"fields": {"updated": "2025-01-15T10:00:00.000+0000"}}
+        )
+
+        has_changes = adapter.detect_changes(readme_path, data)
+
+        assert has_changes is False
+
+    def test_detect_changes_returns_false_if_no_change(self, temp_dir):
+        """detect_changes returns False if updated timestamp unchanged."""
+        adapter = JiraAdapter({}, temp_dir)
+        readme_path = temp_dir / "tracking/areas/jira/PROJ-123/README.md"
+        readme_path.parent.mkdir(parents=True)
+
+        # Save previous metadata
+        metadata_path = readme_path.parent / ".metadata.json"
+        with open(metadata_path, "w") as f:
+            json.dump({"updated": "2025-01-15T10:00:00.000+0000"}, f)
+
+        # Check with same timestamp
+        data = ItemData(
+            title="Test",
+            status="Open",
+            raw_data={"fields": {"updated": "2025-01-15T10:00:00.000+0000"}}
+        )
+
+        has_changes = adapter.detect_changes(readme_path, data)
+
+        assert has_changes is False
+
+    def test_detect_changes_returns_true_if_timestamp_changed(self, temp_dir):
+        """detect_changes returns True if updated timestamp changed."""
+        adapter = JiraAdapter({}, temp_dir)
+        readme_path = temp_dir / "tracking/areas/jira/PROJ-123/README.md"
+        readme_path.parent.mkdir(parents=True)
+
+        # Save previous metadata
+        metadata_path = readme_path.parent / ".metadata.json"
+        with open(metadata_path, "w") as f:
+            json.dump({"updated": "2025-01-15T10:00:00.000+0000"}, f)
+
+        # Check with different timestamp
+        data = ItemData(
+            title="Test",
+            status="In Progress",
+            raw_data={"fields": {"updated": "2025-01-16T10:00:00.000+0000"}}
+        )
+
+        has_changes = adapter.detect_changes(readme_path, data)
+
+        assert has_changes is True
+
+
+class TestJiraActivityLog:
+    """Test Activity Log updates."""
+
+    def test_update_activity_log_with_no_comments(self, temp_dir):
+        """_update_activity_log shows placeholder if no comments."""
+        adapter = JiraAdapter({}, temp_dir)
+
+        content = """# PROJ-123: Test Issue
+
+**Status**: Open
+**Assignee**: unassigned
+
+## Overview
+Test
+
+## Activity Log
+
+Old activity here
+
+## Notes
+Notes here
+"""
+        data = ItemData(
+            title="Test",
+            status="Open",
+            raw_data={"comments": {"comments": []}}
+        )
+
+        result = adapter._update_activity_log(content, data)
+
+        assert "## Activity Log" in result
+        assert "*(Auto-synced from Jira)*" in result
+        assert "Old activity here" not in result
+
+    def test_update_activity_log_with_comments(self, temp_dir):
+        """_update_activity_log populates with Jira comments."""
+        adapter = JiraAdapter({}, temp_dir)
+
+        content = """# PROJ-123: Test Issue
+
+**Status**: Open
+
+## Activity Log
+
+Placeholder
+
+## Notes
+Notes
+"""
+        data = ItemData(
+            title="Test",
+            status="Open",
+            raw_data={
+                "comments": {
+                    "comments": [
+                        {
+                            "author": {"displayName": "John Doe"},
+                            "created": "2025-01-15T10:00:00.000Z",
+                            "body": "This is a test comment"
+                        }
+                    ]
+                }
+            }
+        )
+
+        result = adapter._update_activity_log(content, data)
+
+        assert "John Doe" in result
+        assert "2025-01-15 10:00 UTC" in result
+        assert "This is a test comment" in result
+
+    def test_update_activity_log_returns_unchanged_if_no_section(self, temp_dir):
+        """_update_activity_log returns content unchanged if no Activity Log section."""
+        adapter = JiraAdapter({}, temp_dir)
+
+        content = """# PROJ-123: Test Issue
+
+**Status**: Open
+
+## Overview
+No activity log section
+"""
+        data = ItemData(title="Test", status="Open", raw_data={})
+
+        result = adapter._update_activity_log(content, data)
+
+        assert result == content
+
+    def test_convert_jira_to_markdown_without_pandoc(self, temp_dir, monkeypatch):
+        """_convert_jira_to_markdown returns original text if pandoc unavailable."""
+        # Simulate PANDOC_AVAILABLE = False
+        import cli.adapters.jira as jira_module
+        monkeypatch.setattr(jira_module, "PANDOC_AVAILABLE", False)
+
+        adapter = JiraAdapter({}, temp_dir)
+        jira_text = "h1. Header\n\nSome text"
+
+        result = adapter._convert_jira_to_markdown(jira_text)
+
+        # Should return unchanged
+        assert result == jira_text
+
+    def test_convert_jira_to_markdown_with_empty_text(self, temp_dir):
+        """_convert_jira_to_markdown handles empty text."""
+        adapter = JiraAdapter({}, temp_dir)
+
+        result = adapter._convert_jira_to_markdown("")
+
+        assert result == ""
+
+    @patch("cli.adapters.jira.pypandoc")
+    def test_convert_jira_to_markdown_handles_exception(self, mock_pypandoc, temp_dir):
+        """_convert_jira_to_markdown returns original text on conversion error."""
+        # Simulate pypandoc available but conversion fails
+        import cli.adapters.jira as jira_module
+        jira_module.PANDOC_AVAILABLE = True
+
+        mock_pypandoc.convert_text.side_effect = Exception("Conversion failed")
+
+        adapter = JiraAdapter({}, temp_dir)
+        jira_text = "h1. Header"
+
+        result = adapter._convert_jira_to_markdown(jira_text)
+
+        assert result == jira_text

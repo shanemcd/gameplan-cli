@@ -6,8 +6,11 @@ commands are properly wired up.
 import subprocess
 import sys
 from pathlib import Path
+from unittest.mock import patch, MagicMock
 
 import pytest
+
+from cli.cli import main
 
 
 class TestCLIStructure:
@@ -150,3 +153,103 @@ class TestAgendaCommand:
         )
 
         assert result.returncode == 0
+
+
+class TestCLICommandRouting:
+    """Test CLI command routing with direct function calls."""
+
+    @patch("cli.init.init_gameplan")
+    @patch("sys.argv", ["gameplan", "init"])
+    def test_init_command_calls_init_gameplan(self, mock_init):
+        """init command routes to init_gameplan function."""
+        mock_init.return_value = Path("/test")
+
+        try:
+            main()
+        except SystemExit:
+            pass
+
+        mock_init.assert_called_once()
+
+    @patch("cli.init.init_gameplan")
+    @patch("sys.argv", ["gameplan", "init", "-d", "/tmp/test"])
+    def test_init_command_passes_directory_argument(self, mock_init):
+        """init command passes --directory argument."""
+        mock_init.return_value = Path("/tmp/test")
+
+        try:
+            main()
+        except SystemExit:
+            pass
+
+        # Check that target_dir was passed
+        assert mock_init.call_count == 1
+        assert mock_init.call_args[1]["target_dir"] == Path("/tmp/test")
+
+    @patch("cli.sync.sync_all")
+    @patch("sys.argv", ["gameplan", "sync"])
+    def test_sync_command_calls_sync_all(self, mock_sync):
+        """sync command routes to sync_all function."""
+        try:
+            main()
+        except SystemExit:
+            pass
+
+        mock_sync.assert_called_once()
+
+    @patch("cli.agenda.init_agenda")
+    @patch("sys.argv", ["gameplan", "agenda", "init"])
+    def test_agenda_init_calls_init_agenda(self, mock_init):
+        """agenda init routes to init_agenda function."""
+        try:
+            main()
+        except SystemExit:
+            pass
+
+        mock_init.assert_called_once()
+
+    @patch("cli.agenda.view_agenda")
+    @patch("sys.argv", ["gameplan", "agenda", "view"])
+    def test_agenda_view_calls_view_agenda(self, mock_view):
+        """agenda view routes to view_agenda function."""
+        mock_view.return_value = "# Agenda\n\nTest content"
+
+        try:
+            main()
+        except SystemExit:
+            pass
+
+        mock_view.assert_called_once()
+
+    @patch("cli.agenda.refresh_agenda")
+    @patch("sys.argv", ["gameplan", "agenda", "refresh"])
+    def test_agenda_refresh_calls_refresh_agenda(self, mock_refresh):
+        """agenda refresh routes to refresh_agenda function."""
+        try:
+            main()
+        except SystemExit:
+            pass
+
+        mock_refresh.assert_called_once()
+
+    @patch("sys.argv", ["gameplan"])
+    def test_no_command_shows_help(self, capsys):
+        """Running gameplan with no command shows help."""
+        with pytest.raises(SystemExit):
+            main()
+
+        # argparse writes help to stderr by default
+        captured = capsys.readouterr()
+        output = captured.out + captured.err
+        assert "usage:" in output.lower()
+
+    @patch("sys.argv", ["gameplan", "--help"])
+    def test_help_flag_shows_help(self, capsys):
+        """--help flag shows help text."""
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+
+        assert exc_info.value.code == 0
+        captured = capsys.readouterr()
+        output = captured.out + captured.err
+        assert "usage:" in output.lower()
