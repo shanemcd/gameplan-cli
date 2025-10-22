@@ -6,7 +6,7 @@
 
 ## Problem Statement
 
-Knowledge workers often track work across multiple systems (GitHub, Jira, Linear, etc.), leading to:
+Knowledge workers often track work across multiple systems (GitHub, Jira, etc.), leading to:
 
 - **Context fragmentation**: Important context scattered across issues, PRs, tickets
 - **Manual sync overhead**: Copying status updates between systems
@@ -53,24 +53,24 @@ Knowledge workers often track work across multiple systems (GitHub, Jira, Linear
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                     External Systems                         │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐                  │
-│  │   Jira   │  │  GitHub  │  │  Linear  │  ...             │
-│  └────┬─────┘  └────┬─────┘  └────┬─────┘                  │
-└───────┼─────────────┼─────────────┼──────────────────────────┘
-        │             │             │
-        │             │             │
-        ▼             ▼             ▼
+│  ┌──────────┐  ┌──────────┐                                 │
+│  │   Jira   │  │  GitHub  │  ...                            │
+│  └────┬─────┘  └────┬─────┘                                 │
+└───────┼─────────────┼──────────────────────────────────────┘
+        │             │
+        │             │
+        ▼             ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                      Sync Adapters                           │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐                  │
-│  │  Jira    │  │  GitHub  │  │  Linear  │  ...             │
-│  │ Adapter  │  │ Adapter  │  │ Adapter  │                  │
-│  └────┬─────┘  └────┬─────┘  └────┬─────┘                  │
-└───────┼─────────────┼─────────────┼──────────────────────────┘
-        │             │             │
-        └─────────────┴─────────────┘
-                      │
-                      ▼
+│  ┌──────────┐  ┌──────────┐                                 │
+│  │  Jira    │  │  GitHub  │  ...                            │
+│  │ Adapter  │  │ Adapter  │                                 │
+│  └────┬─────┘  └────┬─────┘                                 │
+└───────┼─────────────┼──────────────────────────────────────┘
+        │             │
+        └─────────────┘
+                │
+                ▼
         ┌──────────────────────────┐
         │   Configuration Layer    │
         │    (gameplan.yaml)       │
@@ -315,7 +315,7 @@ User: gameplan agenda init
   └─▶ Write to disk
 ```
 
-### Sync Flow (Phase 5 - planned)
+### Sync Flow
 
 ```
 User: gameplan sync jira
@@ -325,8 +325,10 @@ User: gameplan sync jira
   ├─▶ For each Jira item:
   │   ├─▶ Call jirahhh CLI
   │   ├─▶ Parse JSON response
+  │   ├─▶ Detect changes with metadata
   │   ├─▶ Get storage path
-  │   └─▶ Update README (preserve manual content)
+  │   ├─▶ Update README (preserve manual content)
+  │   └─▶ Update Activity Log if changed
   │
   └─▶ Done
 ```
@@ -518,16 +520,19 @@ fail_under = 85
 
 See [PROJECT_PLAN.md](PROJECT_PLAN.md) for detailed progress.
 
-**Completed (Phase 1-4)**:
+**Completed (Phase 1-5)**:
 - ✅ Base adapter interface
 - ✅ Init command
-- ✅ Agenda system (simplified)
-- ✅ Jira adapter
+- ✅ Agenda system (init, view, refresh)
+- ✅ Jira adapter with change detection and Activity Log
+- ✅ Sync orchestration
+- ✅ Rich tracked items formatting
 - ✅ CLI integration
 
 **Next**:
-- ⏳ Sync orchestration (Phase 5)
-- ⏳ Additional adapters
+- ⏳ Documentation polish (Phase 6)
+- ⏳ Release prep (Phase 7)
+- ⏳ GitHub adapter
 
 ---
 
