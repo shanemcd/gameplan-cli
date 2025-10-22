@@ -230,7 +230,6 @@ Gameplan uses a pluggable adapter architecture. Each adapter integrates with an 
 
 **Coming Soon**:
 - GitHub adapter (issues, PRs)
-- Linear adapter
 - Generic REST API adapter
 
 ### Using the Jira Adapter
@@ -341,7 +340,6 @@ See **[CONTRIBUTING.md](CONTRIBUTING.md)** for detailed guidelines.
 ### Future Enhancements
 
 - GitHub adapter for issues and PRs
-- Linear adapter
 - Advanced agenda features (checkboxes, logbook, auto-archive)
 - Web UI (optional)
 - Watch mode for continuous sync
