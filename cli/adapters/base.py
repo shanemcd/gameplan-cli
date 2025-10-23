@@ -103,6 +103,22 @@ class Adapter(ABC):
         self.config = config
         self.base_path = base_path
 
+    def _get_command(self, command_name: str) -> str:
+        """Get the command from config or default.
+
+        Args:
+            command_name: Default command name to use if no custom command configured
+
+        Returns:
+            Command, either from config or the default command name
+
+        Example:
+            For an adapter that uses "gh" CLI:
+            - If config has command: "/usr/local/bin/gh", returns that
+            - Otherwise returns "gh" (relies on PATH lookup)
+        """
+        return self.config.get("command", command_name)
+
     @abstractmethod
     def get_adapter_name(self) -> str:
         """Return the adapter name (e.g., 'jira', 'github').

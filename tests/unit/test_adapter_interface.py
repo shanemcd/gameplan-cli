@@ -278,3 +278,112 @@ class TestAdapterInterface:
         content = readme_path.read_text()
         assert "# Test Issue" in content
         assert "Status: In Progress" in content
+
+
+class TestAdapterCommand:
+    """Test the base adapter command functionality."""
+
+    def test_get_command_returns_default_when_no_config(self, temp_dir):
+        """_get_command returns default command name when no command in config."""
+
+        class TestAdapter(Adapter):
+            def get_adapter_name(self):
+                return "test"
+            def load_config(self, config):
+                return []
+            def fetch_item_data(self, item, since=None):
+                return ItemData(title="Test", status="Open")
+            def get_storage_path(self, item, title=None):
+                return self.base_path / "README.md"
+            def update_readme(self, readme_path, data, item):
+                pass
+
+        adapter = TestAdapter({}, temp_dir)
+        command = adapter._get_command("mycli")
+
+        assert command == "mycli"
+
+    def test_get_command_returns_custom_path_when_configured(self, temp_dir):
+        """_get_command returns custom path when command is configured."""
+
+        class TestAdapter(Adapter):
+            def get_adapter_name(self):
+                return "test"
+            def load_config(self, config):
+                return []
+            def fetch_item_data(self, item, since=None):
+                return ItemData(title="Test", status="Open")
+            def get_storage_path(self, item, title=None):
+                return self.base_path / "README.md"
+            def update_readme(self, readme_path, data, item):
+                pass
+
+        config = {"command": "/custom/path/to/mycli"}
+        adapter = TestAdapter(config, temp_dir)
+        command = adapter._get_command("mycli")
+
+        assert command == "/custom/path/to/mycli"
+
+    def test_get_command_supports_relative_paths(self, temp_dir):
+        """_get_command supports relative paths."""
+
+        class TestAdapter(Adapter):
+            def get_adapter_name(self):
+                return "test"
+            def load_config(self, config):
+                return []
+            def fetch_item_data(self, item, since=None):
+                return ItemData(title="Test", status="Open")
+            def get_storage_path(self, item, title=None):
+                return self.base_path / "README.md"
+            def update_readme(self, readme_path, data, item):
+                pass
+
+        config = {"command": "./bin/mycli"}
+        adapter = TestAdapter(config, temp_dir)
+        command = adapter._get_command("mycli")
+
+        assert command == "./bin/mycli"
+
+    def test_get_command_works_with_different_command_names(self, temp_dir):
+        """_get_command works with different default command names."""
+
+        class TestAdapter(Adapter):
+            def get_adapter_name(self):
+                return "test"
+            def load_config(self, config):
+                return []
+            def fetch_item_data(self, item, since=None):
+                return ItemData(title="Test", status="Open")
+            def get_storage_path(self, item, title=None):
+                return self.base_path / "README.md"
+            def update_readme(self, readme_path, data, item):
+                pass
+
+        config = {"command": "/usr/local/bin/custom-tool"}
+        adapter = TestAdapter(config, temp_dir)
+
+        # Should return config value regardless of what default is requested
+        assert adapter._get_command("gh") == "/usr/local/bin/custom-tool"
+        assert adapter._get_command("jirahhh") == "/usr/local/bin/custom-tool"
+        assert adapter._get_command("anytool") == "/usr/local/bin/custom-tool"
+
+    def test_get_command_handles_empty_config(self, temp_dir):
+        """_get_command handles empty config gracefully."""
+
+        class TestAdapter(Adapter):
+            def get_adapter_name(self):
+                return "test"
+            def load_config(self, config):
+                return []
+            def fetch_item_data(self, item, since=None):
+                return ItemData(title="Test", status="Open")
+            def get_storage_path(self, item, title=None):
+                return self.base_path / "README.md"
+            def update_readme(self, readme_path, data, item):
+                pass
+
+        adapter = TestAdapter({}, temp_dir)
+        command = adapter._get_command("tool")
+
+        assert command == "tool"

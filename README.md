@@ -234,6 +234,7 @@ API authentication fails when using OAuth tokens due to...
 ## 🔌 Adapters
 
 Gameplan uses a pluggable adapter architecture. Each adapter integrates with an external tracking system.
+- Configurable command path for custom installations
 
 ### Available Adapters
 

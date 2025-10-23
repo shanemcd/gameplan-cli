@@ -1,11 +1,13 @@
-"""Jira adapter for syncing Jira issues.
+"""Jira adapter for syncing Jira issues via jirahhh CLI.
 
-This adapter integrates with Jira via the jirahhh CLI tool:
-https://github.com/shanemcd/jirahhh
+This adapter integrates with Jira systems by using the jirahhh CLI tool
+(https://github.com/shanemcd/jirahhh) rather than direct API calls.
 
-Requires:
-- jirahhh CLI installed (uvx jirahhh)
-- JIRA_* environment variables configured
+Requirements:
+- jirahhh CLI tool installed (install with: uvx jirahhh)
+- JIRA_* environment variables configured for jirahhh
+  (JIRA_URL, JIRA_EMAIL, JIRA_API_TOKEN)
+- jirahhh binary must be in PATH or configured via binary_path
 """
 import json
 import re
@@ -68,7 +70,8 @@ class JiraAdapter(Adapter):
         env = item.metadata.get("env", "prod")
 
         # Call jirahhh API to get full issue data
-        cmd = ["jirahhh", "api", "GET", f"/rest/api/2/issue/{issue_key}", "--env", env]
+        jirahhh_command = self._get_command("jirahhh")
+        cmd = [jirahhh_command, "api", "GET", f"/rest/api/2/issue/{issue_key}", "--env", env]
 
         result = subprocess.run(
             cmd,
@@ -111,7 +114,7 @@ class JiraAdapter(Adapter):
             status = jira_data.get("status", "")
 
         # Fetch comments
-        comments_cmd = ["jirahhh", "api", "GET", f"/rest/api/2/issue/{issue_key}/comment", "--env", env]
+        comments_cmd = [jirahhh_command, "api", "GET", f"/rest/api/2/issue/{issue_key}/comment", "--env", env]
 
         comments_result = subprocess.run(
             comments_cmd,
@@ -179,7 +182,15 @@ class JiraAdapter(Adapter):
             item: The tracked item
         """
         issue_key = item.id
-        assignee = data.raw_data.get("assignee") or "Unassigned"
+
+        # Extract assignee from raw data (same logic as sync.py)
+        assignee = "Unassigned"
+        if "fields" in data.raw_data:
+            assignee_obj = data.raw_data["fields"].get("assignee")
+            if assignee_obj and isinstance(assignee_obj, dict):
+                assignee = assignee_obj.get("displayName", "Unassigned")
+        else:
+            assignee = data.raw_data.get("assignee", "Unassigned")
 
         # Create directory if needed
         readme_path.parent.mkdir(parents=True, exist_ok=True)
