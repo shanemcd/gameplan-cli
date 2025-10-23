@@ -583,6 +583,127 @@ class TestJiraChangeDetection:
         assert has_changes is True
 
 
+class TestJirahhhCustomBinaryPath:
+    """Test custom binary path configuration."""
+
+    @patch("subprocess.run")
+    def test_uses_default_jirahhh_binary_when_no_config(self, mock_run, temp_dir):
+        """Uses 'jirahhh' binary when no custom binary_path configured."""
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout=json.dumps({
+                "fields": {
+                    "summary": "Test Issue",
+                    "status": {"name": "Open"}
+                }
+            })
+        )
+
+        # No binary_path in config
+        adapter = JiraAdapter({}, temp_dir)
+        item = TrackedItem(
+            id="PROJ-123",
+            adapter="jira",
+            metadata={"issue": "PROJ-123", "env": "prod"}
+        )
+
+        adapter.fetch_item_data(item)
+
+        # Should use default "jirahhh" command
+        call_args = mock_run.call_args_list[0][0][0]
+        assert call_args[0] == "jirahhh"
+
+    @patch("subprocess.run")
+    def test_uses_custom_binary_path_when_configured(self, mock_run, temp_dir):
+        """Uses custom binary path when binary_path configured."""
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout=json.dumps({
+                "fields": {
+                    "summary": "Test Issue",
+                    "status": {"name": "Open"}
+                }
+            })
+        )
+
+        # Custom binary path in config
+        config = {"binary_path": "/custom/path/to/jirahhh"}
+        adapter = JiraAdapter(config, temp_dir)
+        item = TrackedItem(
+            id="PROJ-123",
+            adapter="jira",
+            metadata={"issue": "PROJ-123", "env": "prod"}
+        )
+
+        adapter.fetch_item_data(item)
+
+        # Should use custom path
+        call_args = mock_run.call_args_list[0][0][0]
+        assert call_args[0] == "/custom/path/to/jirahhh"
+
+    @patch("subprocess.run")
+    def test_custom_binary_path_used_for_both_calls(self, mock_run, temp_dir):
+        """Custom binary path used for both issue and comments API calls."""
+        mock_run.side_effect = [
+            MagicMock(
+                returncode=0,
+                stdout=json.dumps({
+                    "fields": {
+                        "summary": "Test Issue",
+                        "status": {"name": "Open"}
+                    }
+                })
+            ),
+            MagicMock(
+                returncode=0,
+                stdout=json.dumps({"comments": []})
+            )
+        ]
+
+        config = {"binary_path": "/usr/local/bin/jirahhh"}
+        adapter = JiraAdapter(config, temp_dir)
+        item = TrackedItem(
+            id="PROJ-123",
+            adapter="jira",
+            metadata={"issue": "PROJ-123", "env": "prod"}
+        )
+
+        adapter.fetch_item_data(item)
+
+        # Both calls should use custom path
+        assert mock_run.call_count == 2
+        first_call_args = mock_run.call_args_list[0][0][0]
+        second_call_args = mock_run.call_args_list[1][0][0]
+        assert first_call_args[0] == "/usr/local/bin/jirahhh"
+        assert second_call_args[0] == "/usr/local/bin/jirahhh"
+
+    @patch("subprocess.run")
+    def test_relative_binary_path_supported(self, mock_run, temp_dir):
+        """Supports relative paths for binary_path."""
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout=json.dumps({
+                "fields": {
+                    "summary": "Test Issue",
+                    "status": {"name": "Open"}
+                }
+            })
+        )
+
+        config = {"binary_path": "./bin/jirahhh"}
+        adapter = JiraAdapter(config, temp_dir)
+        item = TrackedItem(
+            id="PROJ-123",
+            adapter="jira",
+            metadata={"issue": "PROJ-123", "env": "prod"}
+        )
+
+        adapter.fetch_item_data(item)
+
+        call_args = mock_run.call_args_list[0][0][0]
+        assert call_args[0] == "./bin/jirahhh"
+
+
 class TestJiraActivityLog:
     """Test Activity Log updates."""
 

@@ -278,3 +278,116 @@ class TestAdapterInterface:
         content = readme_path.read_text()
         assert "# Test Issue" in content
         assert "Status: In Progress" in content
+
+
+class TestAdapterBinaryPath:
+    """Test the base adapter binary path functionality.
+
+    AIA: Primarily AI, Stylistic edits, Content edits, New content, Human-initiated, Reviewed, Claude Code [Sonnet 4] v1.0
+    Vibe-Coder: Andrew Potozniak <tyraziel@gmail.com>
+    """
+
+    def test_get_binary_path_returns_default_when_no_config(self, temp_dir):
+        """_get_binary_path returns default binary name when no binary_path in config."""
+
+        class TestAdapter(Adapter):
+            def get_adapter_name(self):
+                return "test"
+            def load_config(self, config):
+                return []
+            def fetch_item_data(self, item, since=None):
+                return ItemData(title="Test", status="Open")
+            def get_storage_path(self, item, title=None):
+                return self.base_path / "README.md"
+            def update_readme(self, readme_path, data, item):
+                pass
+
+        adapter = TestAdapter({}, temp_dir)
+        binary_path = adapter._get_binary_path("mycli")
+
+        assert binary_path == "mycli"
+
+    def test_get_binary_path_returns_custom_path_when_configured(self, temp_dir):
+        """_get_binary_path returns custom path when binary_path is configured."""
+
+        class TestAdapter(Adapter):
+            def get_adapter_name(self):
+                return "test"
+            def load_config(self, config):
+                return []
+            def fetch_item_data(self, item, since=None):
+                return ItemData(title="Test", status="Open")
+            def get_storage_path(self, item, title=None):
+                return self.base_path / "README.md"
+            def update_readme(self, readme_path, data, item):
+                pass
+
+        config = {"binary_path": "/custom/path/to/mycli"}
+        adapter = TestAdapter(config, temp_dir)
+        binary_path = adapter._get_binary_path("mycli")
+
+        assert binary_path == "/custom/path/to/mycli"
+
+    def test_get_binary_path_supports_relative_paths(self, temp_dir):
+        """_get_binary_path supports relative paths."""
+
+        class TestAdapter(Adapter):
+            def get_adapter_name(self):
+                return "test"
+            def load_config(self, config):
+                return []
+            def fetch_item_data(self, item, since=None):
+                return ItemData(title="Test", status="Open")
+            def get_storage_path(self, item, title=None):
+                return self.base_path / "README.md"
+            def update_readme(self, readme_path, data, item):
+                pass
+
+        config = {"binary_path": "./bin/mycli"}
+        adapter = TestAdapter(config, temp_dir)
+        binary_path = adapter._get_binary_path("mycli")
+
+        assert binary_path == "./bin/mycli"
+
+    def test_get_binary_path_works_with_different_binary_names(self, temp_dir):
+        """_get_binary_path works with different default binary names."""
+
+        class TestAdapter(Adapter):
+            def get_adapter_name(self):
+                return "test"
+            def load_config(self, config):
+                return []
+            def fetch_item_data(self, item, since=None):
+                return ItemData(title="Test", status="Open")
+            def get_storage_path(self, item, title=None):
+                return self.base_path / "README.md"
+            def update_readme(self, readme_path, data, item):
+                pass
+
+        config = {"binary_path": "/usr/local/bin/custom-tool"}
+        adapter = TestAdapter(config, temp_dir)
+
+        # Should return config value regardless of what default is requested
+        assert adapter._get_binary_path("gh") == "/usr/local/bin/custom-tool"
+        assert adapter._get_binary_path("jirahhh") == "/usr/local/bin/custom-tool"
+        assert adapter._get_binary_path("anytool") == "/usr/local/bin/custom-tool"
+
+    def test_get_binary_path_handles_empty_config(self, temp_dir):
+        """_get_binary_path handles empty config gracefully."""
+
+        class TestAdapter(Adapter):
+            def get_adapter_name(self):
+                return "test"
+            def load_config(self, config):
+                return []
+            def fetch_item_data(self, item, since=None):
+                return ItemData(title="Test", status="Open")
+            def get_storage_path(self, item, title=None):
+                return self.base_path / "README.md"
+            def update_readme(self, readme_path, data, item):
+                pass
+
+        adapter = TestAdapter({}, temp_dir)
+        binary_path = adapter._get_binary_path("tool")
+
+        assert binary_path == "tool"

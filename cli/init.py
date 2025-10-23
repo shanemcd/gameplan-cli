@@ -84,6 +84,9 @@ areas:
     #     env: prod
     #   - issue: PROJ-456
     #     env: staging
+    #
+    # Optional: Specify custom jirahhh binary path
+    # binary_path: /usr/local/bin/jirahhh
 
 # Agenda: Configure your daily AGENDA.md file
 agenda:

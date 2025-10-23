@@ -103,6 +103,25 @@ class Adapter(ABC):
         self.config = config
         self.base_path = base_path
 
+    def _get_binary_path(self, binary_name: str) -> str:
+        """Get the binary path from config or default.
+
+        Args:
+            binary_name: Default binary name to use if no custom path configured
+
+        Returns:
+            Path to binary, either from config or the default binary name
+
+        Example:
+            For an adapter that uses "gh" CLI:
+            - If config has binary_path: "/usr/local/bin/gh", returns that
+            - Otherwise returns "gh" (relies on PATH lookup)
+
+        AIA: Primarily AI, Stylistic edits, Content edits, New content, Human-initiated, Reviewed, Claude Code [Sonnet 4] v1.0
+        Vibe-Coder: Andrew Potozniak <tyraziel@gmail.com>
+        """
+        return self.config.get("binary_path", binary_name)
+
     @abstractmethod
     def get_adapter_name(self) -> str:
         """Return the adapter name (e.g., 'jira', 'github').
