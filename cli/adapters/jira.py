@@ -182,7 +182,17 @@ class JiraAdapter(Adapter):
             item: The tracked item
         """
         issue_key = item.id
-        assignee = data.raw_data.get("assignee") or "Unassigned"
+
+        # Extract assignee from raw data (same logic as sync.py)
+        # AIA: Primarily AI, Stylistic edits, Content edits, New content, Human-initiated, Reviewed, Claude Code [Sonnet 4] v1.0
+        # Vibe-Coder: Andrew Potozniak <tyraziel@gmail.com>
+        assignee = "Unassigned"
+        if "fields" in data.raw_data:
+            assignee_obj = data.raw_data["fields"].get("assignee")
+            if assignee_obj and isinstance(assignee_obj, dict):
+                assignee = assignee_obj.get("displayName", "Unassigned")
+        else:
+            assignee = data.raw_data.get("assignee", "Unassigned")
 
         # Create directory if needed
         readme_path.parent.mkdir(parents=True, exist_ok=True)

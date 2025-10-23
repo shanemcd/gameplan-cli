@@ -300,6 +300,34 @@ class TestJiraUpdateReadme:
         assert "Assignee" in content or "assignee" in content
         assert "johndoe" in content
 
+    def test_update_readme_extracts_assignee_from_jira_api_structure(self, temp_dir):
+        """update_readme correctly extracts assignee from Jira API fields structure.
+
+        AIA: Primarily AI, Stylistic edits, Content edits, New content, Human-initiated, Reviewed, Claude Code [Sonnet 4] v1.0
+        Vibe-Coder: Andrew Potozniak <tyraziel@gmail.com>
+        """
+        adapter = JiraAdapter({}, temp_dir)
+        item = TrackedItem(id="PROJ-123", adapter="jira", metadata={})
+        data = ItemData(
+            title="Test Issue",
+            status="Open",
+            raw_data={
+                "fields": {
+                    "assignee": {
+                        "displayName": "Vibe Coder 1.z3r0"
+                    }
+                }
+            }
+        )
+        readme_path = temp_dir / "README.md"
+
+        adapter.update_readme(readme_path, data, item)
+
+        content = readme_path.read_text()
+        assert "Assignee" in content or "assignee" in content
+        assert "Vibe Coder 1.z3r0" in content
+        assert "Unassigned" not in content
+
     def test_update_readme_is_idempotent(self, temp_dir):
         """update_readme can be run multiple times with same result."""
         adapter = JiraAdapter({}, temp_dir)
