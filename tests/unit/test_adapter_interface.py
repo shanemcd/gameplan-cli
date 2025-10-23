@@ -280,15 +280,11 @@ class TestAdapterInterface:
         assert "Status: In Progress" in content
 
 
-class TestAdapterBinaryPath:
-    """Test the base adapter binary path functionality.
+class TestAdapterCommand:
+    """Test the base adapter command functionality."""
 
-    AIA: Primarily AI, Stylistic edits, Content edits, New content, Human-initiated, Reviewed, Claude Code [Sonnet 4] v1.0
-    Vibe-Coder: Andrew Potozniak <tyraziel@gmail.com>
-    """
-
-    def test_get_binary_path_returns_default_when_no_config(self, temp_dir):
-        """_get_binary_path returns default binary name when no binary_path in config."""
+    def test_get_command_returns_default_when_no_config(self, temp_dir):
+        """_get_command returns default command name when no command in config."""
 
         class TestAdapter(Adapter):
             def get_adapter_name(self):
@@ -303,12 +299,12 @@ class TestAdapterBinaryPath:
                 pass
 
         adapter = TestAdapter({}, temp_dir)
-        binary_path = adapter._get_binary_path("mycli")
+        command = adapter._get_command("mycli")
 
-        assert binary_path == "mycli"
+        assert command == "mycli"
 
-    def test_get_binary_path_returns_custom_path_when_configured(self, temp_dir):
-        """_get_binary_path returns custom path when binary_path is configured."""
+    def test_get_command_returns_custom_path_when_configured(self, temp_dir):
+        """_get_command returns custom path when command is configured."""
 
         class TestAdapter(Adapter):
             def get_adapter_name(self):
@@ -322,14 +318,14 @@ class TestAdapterBinaryPath:
             def update_readme(self, readme_path, data, item):
                 pass
 
-        config = {"binary_path": "/custom/path/to/mycli"}
+        config = {"command": "/custom/path/to/mycli"}
         adapter = TestAdapter(config, temp_dir)
-        binary_path = adapter._get_binary_path("mycli")
+        command = adapter._get_command("mycli")
 
-        assert binary_path == "/custom/path/to/mycli"
+        assert command == "/custom/path/to/mycli"
 
-    def test_get_binary_path_supports_relative_paths(self, temp_dir):
-        """_get_binary_path supports relative paths."""
+    def test_get_command_supports_relative_paths(self, temp_dir):
+        """_get_command supports relative paths."""
 
         class TestAdapter(Adapter):
             def get_adapter_name(self):
@@ -343,14 +339,14 @@ class TestAdapterBinaryPath:
             def update_readme(self, readme_path, data, item):
                 pass
 
-        config = {"binary_path": "./bin/mycli"}
+        config = {"command": "./bin/mycli"}
         adapter = TestAdapter(config, temp_dir)
-        binary_path = adapter._get_binary_path("mycli")
+        command = adapter._get_command("mycli")
 
-        assert binary_path == "./bin/mycli"
+        assert command == "./bin/mycli"
 
-    def test_get_binary_path_works_with_different_binary_names(self, temp_dir):
-        """_get_binary_path works with different default binary names."""
+    def test_get_command_works_with_different_command_names(self, temp_dir):
+        """_get_command works with different default command names."""
 
         class TestAdapter(Adapter):
             def get_adapter_name(self):
@@ -364,16 +360,16 @@ class TestAdapterBinaryPath:
             def update_readme(self, readme_path, data, item):
                 pass
 
-        config = {"binary_path": "/usr/local/bin/custom-tool"}
+        config = {"command": "/usr/local/bin/custom-tool"}
         adapter = TestAdapter(config, temp_dir)
 
         # Should return config value regardless of what default is requested
-        assert adapter._get_binary_path("gh") == "/usr/local/bin/custom-tool"
-        assert adapter._get_binary_path("jirahhh") == "/usr/local/bin/custom-tool"
-        assert adapter._get_binary_path("anytool") == "/usr/local/bin/custom-tool"
+        assert adapter._get_command("gh") == "/usr/local/bin/custom-tool"
+        assert adapter._get_command("jirahhh") == "/usr/local/bin/custom-tool"
+        assert adapter._get_command("anytool") == "/usr/local/bin/custom-tool"
 
-    def test_get_binary_path_handles_empty_config(self, temp_dir):
-        """_get_binary_path handles empty config gracefully."""
+    def test_get_command_handles_empty_config(self, temp_dir):
+        """_get_command handles empty config gracefully."""
 
         class TestAdapter(Adapter):
             def get_adapter_name(self):
@@ -388,6 +384,6 @@ class TestAdapterBinaryPath:
                 pass
 
         adapter = TestAdapter({}, temp_dir)
-        binary_path = adapter._get_binary_path("tool")
+        command = adapter._get_command("tool")
 
-        assert binary_path == "tool"
+        assert command == "tool"

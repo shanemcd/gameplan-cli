@@ -301,11 +301,7 @@ class TestJiraUpdateReadme:
         assert "johndoe" in content
 
     def test_update_readme_extracts_assignee_from_jira_api_structure(self, temp_dir):
-        """update_readme correctly extracts assignee from Jira API fields structure.
-
-        AIA: Primarily AI, Stylistic edits, Content edits, New content, Human-initiated, Reviewed, Claude Code [Sonnet 4] v1.0
-        Vibe-Coder: Andrew Potozniak <tyraziel@gmail.com>
-        """
+        """update_readme correctly extracts assignee from Jira API fields structure."""
         adapter = JiraAdapter({}, temp_dir)
         item = TrackedItem(id="PROJ-123", adapter="jira", metadata={})
         data = ItemData(
@@ -611,12 +607,12 @@ class TestJiraChangeDetection:
         assert has_changes is True
 
 
-class TestJirahhhCustomBinaryPath:
-    """Test custom binary path configuration."""
+class TestJirahhhCustomCommand:
+    """Test custom command configuration."""
 
     @patch("subprocess.run")
-    def test_uses_default_jirahhh_binary_when_no_config(self, mock_run, temp_dir):
-        """Uses 'jirahhh' binary when no custom binary_path configured."""
+    def test_uses_default_jirahhh_command_when_no_config(self, mock_run, temp_dir):
+        """Uses 'jirahhh' command when no custom command configured."""
         mock_run.return_value = MagicMock(
             returncode=0,
             stdout=json.dumps({
@@ -627,7 +623,7 @@ class TestJirahhhCustomBinaryPath:
             })
         )
 
-        # No binary_path in config
+        # No command in config
         adapter = JiraAdapter({}, temp_dir)
         item = TrackedItem(
             id="PROJ-123",
@@ -642,8 +638,8 @@ class TestJirahhhCustomBinaryPath:
         assert call_args[0] == "jirahhh"
 
     @patch("subprocess.run")
-    def test_uses_custom_binary_path_when_configured(self, mock_run, temp_dir):
-        """Uses custom binary path when binary_path configured."""
+    def test_uses_custom_command_when_configured(self, mock_run, temp_dir):
+        """Uses custom command when command configured."""
         mock_run.return_value = MagicMock(
             returncode=0,
             stdout=json.dumps({
@@ -654,8 +650,8 @@ class TestJirahhhCustomBinaryPath:
             })
         )
 
-        # Custom binary path in config
-        config = {"binary_path": "/custom/path/to/jirahhh"}
+        # Custom command in config
+        config = {"command": "/custom/path/to/jirahhh"}
         adapter = JiraAdapter(config, temp_dir)
         item = TrackedItem(
             id="PROJ-123",
@@ -670,8 +666,8 @@ class TestJirahhhCustomBinaryPath:
         assert call_args[0] == "/custom/path/to/jirahhh"
 
     @patch("subprocess.run")
-    def test_custom_binary_path_used_for_both_calls(self, mock_run, temp_dir):
-        """Custom binary path used for both issue and comments API calls."""
+    def test_custom_command_used_for_both_calls(self, mock_run, temp_dir):
+        """Custom command used for both issue and comments API calls."""
         mock_run.side_effect = [
             MagicMock(
                 returncode=0,
@@ -688,7 +684,7 @@ class TestJirahhhCustomBinaryPath:
             )
         ]
 
-        config = {"binary_path": "/usr/local/bin/jirahhh"}
+        config = {"command": "/usr/local/bin/jirahhh"}
         adapter = JiraAdapter(config, temp_dir)
         item = TrackedItem(
             id="PROJ-123",
@@ -706,8 +702,8 @@ class TestJirahhhCustomBinaryPath:
         assert second_call_args[0] == "/usr/local/bin/jirahhh"
 
     @patch("subprocess.run")
-    def test_relative_binary_path_supported(self, mock_run, temp_dir):
-        """Supports relative paths for binary_path."""
+    def test_relative_command_path_supported(self, mock_run, temp_dir):
+        """Supports relative paths for command."""
         mock_run.return_value = MagicMock(
             returncode=0,
             stdout=json.dumps({
@@ -718,7 +714,7 @@ class TestJirahhhCustomBinaryPath:
             })
         )
 
-        config = {"binary_path": "./bin/jirahhh"}
+        config = {"command": "./bin/jirahhh"}
         adapter = JiraAdapter(config, temp_dir)
         item = TrackedItem(
             id="PROJ-123",

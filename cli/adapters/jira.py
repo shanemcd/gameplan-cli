@@ -70,8 +70,8 @@ class JiraAdapter(Adapter):
         env = item.metadata.get("env", "prod")
 
         # Call jirahhh API to get full issue data
-        jirahhh_binary = self._get_binary_path("jirahhh")
-        cmd = [jirahhh_binary, "api", "GET", f"/rest/api/2/issue/{issue_key}", "--env", env]
+        jirahhh_command = self._get_command("jirahhh")
+        cmd = [jirahhh_command, "api", "GET", f"/rest/api/2/issue/{issue_key}", "--env", env]
 
         result = subprocess.run(
             cmd,
@@ -114,7 +114,7 @@ class JiraAdapter(Adapter):
             status = jira_data.get("status", "")
 
         # Fetch comments
-        comments_cmd = [jirahhh_binary, "api", "GET", f"/rest/api/2/issue/{issue_key}/comment", "--env", env]
+        comments_cmd = [jirahhh_command, "api", "GET", f"/rest/api/2/issue/{issue_key}/comment", "--env", env]
 
         comments_result = subprocess.run(
             comments_cmd,
@@ -184,8 +184,6 @@ class JiraAdapter(Adapter):
         issue_key = item.id
 
         # Extract assignee from raw data (same logic as sync.py)
-        # AIA: Primarily AI, Stylistic edits, Content edits, New content, Human-initiated, Reviewed, Claude Code [Sonnet 4] v1.0
-        # Vibe-Coder: Andrew Potozniak <tyraziel@gmail.com>
         assignee = "Unassigned"
         if "fields" in data.raw_data:
             assignee_obj = data.raw_data["fields"].get("assignee")
