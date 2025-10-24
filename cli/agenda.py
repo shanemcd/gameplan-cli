@@ -274,7 +274,8 @@ def _update_command_section(content: str, section: Dict[str, Any], base_path: Pa
 
     # Find section and replace content between this header and next header (or end)
     # Pattern to match: ## Header\n(anything until next ## or end)
-    pattern = rf"({header_pattern})\n.*?(?=\n##|\n$|$)"
+    # Note: Use '\n## ' (with space) to match only h2 headers, not h3/h4/etc (###, ####)
+    pattern = rf"({header_pattern})\n.*?(?=\n## |\n$|$)"
 
     replacement = rf"\1\n{output}"
 

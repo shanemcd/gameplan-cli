@@ -290,7 +290,13 @@ class TestJiraUpdateReadme:
         data = ItemData(
             title="Test Issue",
             status="Open",
-            raw_data={"assignee": "johndoe"}
+            raw_data={
+                "fields": {
+                    "assignee": {
+                        "displayName": "johndoe"
+                    }
+                }
+            }
         )
         readme_path = temp_dir / "README.md"
 
@@ -371,7 +377,13 @@ This is manually written context that should be preserved.
         data = ItemData(
             title="Test Issue",
             status="In Progress",
-            raw_data={"assignee": "johndoe"}
+            raw_data={
+                "fields": {
+                    "assignee": {
+                        "displayName": "johndoe"
+                    }
+                }
+            }
         )
         adapter.update_readme(readme_path, data, item)
 
