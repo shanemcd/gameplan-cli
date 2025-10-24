@@ -174,7 +174,7 @@ class JiraAdapter(Adapter):
     ) -> None:
         """Update README.md with Jira data.
 
-        Updates Status and Assignee fields while preserving all manual content.
+        Updates Title, Status and Assignee fields while preserving all manual content.
 
         Args:
             readme_path: Path to the README.md file
@@ -183,14 +183,12 @@ class JiraAdapter(Adapter):
         """
         issue_key = item.id
 
-        # Extract assignee from raw data (same logic as sync.py)
+        # Extract assignee from fields.assignee.displayName
         assignee = "Unassigned"
         if "fields" in data.raw_data:
             assignee_obj = data.raw_data["fields"].get("assignee")
             if assignee_obj and isinstance(assignee_obj, dict):
                 assignee = assignee_obj.get("displayName", "Unassigned")
-        else:
-            assignee = data.raw_data.get("assignee", "Unassigned")
 
         # Create directory if needed
         readme_path.parent.mkdir(parents=True, exist_ok=True)
@@ -236,7 +234,7 @@ class JiraAdapter(Adapter):
     ) -> str:
         """Update existing README.md content.
 
-        Updates Status, Assignee, and Activity Log while preserving manual content.
+        Updates Title, Status, Assignee, and Activity Log while preserving manual content.
 
         Args:
             content: Current README content
@@ -246,6 +244,19 @@ class JiraAdapter(Adapter):
         Returns:
             Updated README content
         """
+        # Update Title (h1 heading) - matches pattern: # ISSUE-KEY: Title
+        title_pattern = r"^#\s+[A-Z]+-\d+:\s+.*$"
+        issue_key_match = re.search(r"^#\s+([A-Z]+-\d+):", content, re.MULTILINE)
+        if issue_key_match:
+            issue_key = issue_key_match.group(1)
+            content = re.sub(
+                title_pattern,
+                f"# {issue_key}: {data.title}",
+                content,
+                count=1,
+                flags=re.MULTILINE
+            )
+
         # Update Status field
         status_pattern = r"\*\*Status\*\*:\s*.*"
         content = re.sub(
