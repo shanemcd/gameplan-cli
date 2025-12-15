@@ -131,8 +131,13 @@ def refresh_agenda(base_path: Optional[Path] = None) -> Path:
     # Update date header to today
     content = _update_date_header(content)
 
-    # Update command-driven sections
+    # Get configured sections
     sections = config.get("agenda", {}).get("sections", [])
+
+    # Reorder sections to match config order (preserving content)
+    content = _reorder_sections(content, sections)
+
+    # Update command-driven sections
     for section in sections:
         if "command" in section:
             content = _update_command_section(content, section, base_path)
@@ -183,6 +188,68 @@ def _update_date_header(content: str) -> str:
     updated = re.sub(pattern, new_header, content, count=1, flags=re.MULTILINE)
 
     return updated
+
+
+def _reorder_sections(content: str, sections: List[Dict[str, Any]]) -> str:
+    """Reorder sections to match config order, preserving all content.
+
+    Extracts all sections from AGENDA.md, then reassembles them in the
+    order specified in gameplan.yaml. Missing sections are created with
+    placeholder content.
+
+    Args:
+        content: Current AGENDA.md content
+        sections: List of section configurations from gameplan.yaml
+
+    Returns:
+        Updated content with sections in config order
+    """
+    # Extract header (everything before first ## section)
+    first_section_match = re.search(r"^## ", content, re.MULTILINE)
+    if not first_section_match:
+        # No sections found, just return content as-is
+        return content
+
+    header = content[:first_section_match.start()]
+
+    # Extract all existing sections with their content
+    # Pattern: ## header\n(content until next ## or end)
+    section_pattern = r"(## [^\n]+)\n(.*?)(?=\n## |\Z)"
+    existing_sections = {}
+
+    for match in re.finditer(section_pattern, content, re.DOTALL):
+        section_header = match.group(1)
+        section_content = match.group(2).rstrip()
+        existing_sections[section_header] = section_content
+
+    # Build new content in config order
+    new_sections = []
+
+    for section in sections:
+        name = section["name"]
+        emoji = section.get("emoji", "")
+
+        if emoji:
+            expected_header = f"## {emoji} {name}"
+        else:
+            expected_header = f"## {name}"
+
+        if expected_header in existing_sections:
+            # Use existing content
+            new_sections.append(f"{expected_header}\n{existing_sections[expected_header]}")
+        else:
+            # Create new section with placeholder
+            section_lines = _generate_section(section)
+            new_sections.append("\n".join(section_lines))
+
+    # Reassemble: header + sections
+    result = header + "\n".join(new_sections)
+
+    # Ensure trailing newline
+    if not result.endswith("\n"):
+        result += "\n"
+
+    return result
 
 
 def _generate_section(section: Dict[str, Any]) -> List[str]:
