@@ -3,12 +3,13 @@
 The agenda system provides a living AGENDA.md file that combines:
 - Manual sections: User-maintained content
 - Command-driven sections: Auto-populated by running shell commands
+- Logbook: Automatic archival of completed tasks to LOGBOOK.md files
 """
 import re
 import subprocess
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 
 import yaml
 
@@ -93,7 +94,8 @@ def refresh_agenda(base_path: Optional[Path] = None) -> Path:
     """Refresh command-driven sections in AGENDA.md.
 
     Runs configured commands and updates their sections while preserving
-    all manual content.
+    all manual content. Also processes the logbook by moving completed
+    tasks (marked with ✅ YYYY-MM-DD) to each item's LOGBOOK.md file.
 
     Args:
         base_path: Base directory (default: current directory)
@@ -126,6 +128,11 @@ def refresh_agenda(base_path: Optional[Path] = None) -> Path:
             "Run 'gameplan agenda init' first."
         )
 
+    # Process logbook FIRST (before other updates)
+    # This extracts completed tasks, logs them, and removes from agenda
+    process_logbook(base_path)
+
+    # Re-read content after logbook processing
     content = agenda_file.read_text()
 
     # Update date header to today
@@ -563,3 +570,373 @@ def _format_single_tracked_item(
     lines.append("")
 
     return "\n".join(lines)
+
+
+# =============================================================================
+# Logbook Functions - Automatic archival of completed tasks
+# =============================================================================
+
+
+def extract_completed_tasks(content: str) -> Dict[str, Dict[str, List[str]]]:
+    """Extract ALL completed tasks from AGENDA.md content with any date.
+
+    Scans the Actions subsections of tracked items for completed tasks
+    (lines starting with '- [x]') that have a completion date (✅ YYYY-MM-DD).
+    Also extracts completed tasks from outside tracked items into "Other".
+
+    Args:
+        content: AGENDA.md content
+
+    Returns:
+        Dict mapping item titles (or "Other") to dict of dates to tasks:
+        {
+            "[ANSTRAT-1567] Title": {
+                "2025-10-13": ["- [x] Task 1 ✅ 2025-10-13"],
+            },
+            "Other": {
+                "2025-10-13": ["- [x] Misc task ✅ 2025-10-13"],
+            }
+        }
+    """
+    completed_tasks: Dict[str, Dict[str, List[str]]] = {}
+    current_item_title: Optional[str] = None
+    in_actions_section = False
+    in_tracked_items_section = False
+
+    # Pattern to match completion date: ✅ YYYY-MM-DD
+    date_pattern = re.compile(r'✅ (\d{4}-\d{2}-\d{2})')
+
+    for line in content.split('\n'):
+        # Check for Tracked Items section (## 🔄 Tracked Items or ## Tracked Items)
+        if line.startswith('## ') and 'Tracked Items' in line:
+            in_tracked_items_section = True
+            current_item_title = None
+            in_actions_section = False
+
+        # Check for other h2 sections (end of Tracked Items)
+        elif line.startswith('## ') and 'Tracked Items' not in line:
+            in_tracked_items_section = False
+            current_item_title = None
+            in_actions_section = False
+
+        # Check for item heading (### [...]) within Tracked Items
+        elif in_tracked_items_section and line.startswith('### ['):
+            current_item_title = line.replace('### ', '')
+            in_actions_section = False
+
+        # Check for Actions subsection
+        elif line.strip() == '#### Actions':
+            in_actions_section = True
+
+        # Check for any other h4 subsection (end of Actions)
+        elif line.startswith('#### ') and line.strip() != '#### Actions':
+            in_actions_section = False
+
+        # Check for completed tasks
+        elif line.startswith('- [x]'):
+            match = date_pattern.search(line)
+            if match:
+                task_date = match.group(1)
+
+                # Determine which category this task belongs to
+                if in_tracked_items_section and current_item_title and in_actions_section:
+                    category = current_item_title
+                else:
+                    category = "Other"
+
+                if category not in completed_tasks:
+                    completed_tasks[category] = {}
+
+                if task_date not in completed_tasks[category]:
+                    completed_tasks[category][task_date] = []
+
+                completed_tasks[category][task_date].append(line)
+
+    return completed_tasks
+
+
+def _extract_issue_key_from_title(item_title: str) -> Optional[str]:
+    """Extract issue key from item title like '[ANSTRAT-1567] Title'.
+
+    Args:
+        item_title: Item title from AGENDA.md
+
+    Returns:
+        Issue key (e.g., 'ANSTRAT-1567') or None if not found
+    """
+    match = re.match(r'\[([A-Z]+-\d+)\]', item_title)
+    return match.group(1) if match else None
+
+
+def _get_week_start(date_str: str) -> str:
+    """Get the Monday of the week containing the given date.
+
+    Args:
+        date_str: Date in YYYY-MM-DD format
+
+    Returns:
+        Monday's date in YYYY-MM-DD format
+    """
+    from datetime import datetime as dt, timedelta
+    date = dt.strptime(date_str, "%Y-%m-%d")
+    # Monday is weekday 0
+    monday = date - timedelta(days=date.weekday())
+    return monday.strftime("%Y-%m-%d")
+
+
+def _format_issue_heading(item_title: str) -> str:
+    """Format item title as a logbook heading.
+
+    Args:
+        item_title: Item title like '[ANSTRAT-1567] Some Title'
+
+    Returns:
+        Formatted heading like 'ANSTRAT-1567 (Some Title)'
+    """
+    if item_title == "Other":
+        return "Other"
+
+    issue_key = _extract_issue_key_from_title(item_title)
+    if issue_key:
+        # Extract title part after the key (handle with or without trailing space)
+        title_part = item_title.replace(f"[{issue_key}]", "").strip()
+        if title_part:
+            return f"{issue_key} ({title_part})"
+        return issue_key
+    return item_title
+
+
+def append_to_logbook(
+    completed_tasks: Dict[str, Dict[str, List[str]]],
+    base_path: Path
+) -> Tuple[int, int]:
+    """Append completed tasks to top-level LOGBOOK.md.
+
+    Creates or updates LOGBOOK.md at the repository root with weekly sections
+    and initiative sub-headings. Tasks are organized by week (newest first),
+    then by initiative.
+
+    Structure:
+        # Logbook
+
+        ## Week of 2026-01-06
+
+        ### ANSTRAT-598 (MRBC)
+
+        - [x] Task 1 ✅ 2026-01-08
+
+        ### Other
+
+        - [x] Misc task ✅ 2026-01-07
+
+    Args:
+        completed_tasks: Dict mapping item titles to dict of dates to tasks
+        base_path: Base directory
+
+    Returns:
+        Tuple of (total_tasks_logged, initiatives_logged)
+    """
+    if not completed_tasks:
+        return (0, 0)
+
+    logbook_file = base_path / "LOGBOOK.md"
+
+    # Read existing logbook if it exists
+    if logbook_file.exists():
+        existing_content = logbook_file.read_text()
+    else:
+        existing_content = "# Logbook\n"
+
+    # Parse existing logbook structure
+    existing_entries = _parse_logbook(existing_content)
+
+    # Merge new tasks into existing structure
+    logged_count = 0
+    initiatives_logged = set()
+
+    for item_title, date_tasks in completed_tasks.items():
+        issue_heading = _format_issue_heading(item_title)
+
+        for task_date, tasks in date_tasks.items():
+            week_start = _get_week_start(task_date)
+
+            if week_start not in existing_entries:
+                existing_entries[week_start] = {}
+
+            if issue_heading not in existing_entries[week_start]:
+                existing_entries[week_start][issue_heading] = []
+
+            # Add tasks (avoiding duplicates)
+            for task in tasks:
+                if task not in existing_entries[week_start][issue_heading]:
+                    existing_entries[week_start][issue_heading].append(task)
+                    logged_count += 1
+
+            initiatives_logged.add(issue_heading)
+
+    # Rebuild logbook content
+    new_content = _build_logbook_content(existing_entries)
+
+    # Write back
+    logbook_file.write_text(new_content)
+
+    return (logged_count, len(initiatives_logged))
+
+
+def _parse_logbook(content: str) -> Dict[str, Dict[str, List[str]]]:
+    """Parse existing LOGBOOK.md into structured data.
+
+    Args:
+        content: LOGBOOK.md content
+
+    Returns:
+        Dict mapping week_start -> initiative -> list of tasks
+    """
+    entries: Dict[str, Dict[str, List[str]]] = {}
+    current_week: Optional[str] = None
+    current_initiative: Optional[str] = None
+
+    for line in content.split('\n'):
+        # Week heading: ## Week of YYYY-MM-DD
+        if line.startswith('## Week of '):
+            week_date = line.replace('## Week of ', '').strip()
+            current_week = week_date
+            current_initiative = None
+            if current_week not in entries:
+                entries[current_week] = {}
+
+        # Initiative heading: ### ISSUE-KEY (Title) or ### Other
+        elif line.startswith('### ') and current_week:
+            current_initiative = line.replace('### ', '').strip()
+            if current_initiative not in entries[current_week]:
+                entries[current_week][current_initiative] = []
+
+        # Task line
+        elif line.startswith('- [x]') and current_week and current_initiative:
+            entries[current_week][current_initiative].append(line)
+
+    return entries
+
+
+def _build_logbook_content(entries: Dict[str, Dict[str, List[str]]]) -> str:
+    """Build LOGBOOK.md content from structured data.
+
+    Args:
+        entries: Dict mapping week_start -> initiative -> list of tasks
+
+    Returns:
+        Formatted LOGBOOK.md content
+    """
+    lines = ["# Logbook", ""]
+
+    # Sort weeks in reverse chronological order
+    for week_start in sorted(entries.keys(), reverse=True):
+        initiatives = entries[week_start]
+        if not initiatives:
+            continue
+
+        lines.append(f"## Week of {week_start}")
+        lines.append("")
+
+        # Sort initiatives: tracked items first (alphabetically), "Other" last
+        sorted_initiatives = sorted(
+            initiatives.keys(),
+            key=lambda x: (x == "Other", x)
+        )
+
+        for initiative in sorted_initiatives:
+            tasks = initiatives[initiative]
+            if not tasks:
+                continue
+
+            lines.append(f"### {initiative}")
+            lines.append("")
+
+            # Sort tasks by date (newest first within the week)
+            date_pattern = re.compile(r'✅ (\d{4}-\d{2}-\d{2})')
+            sorted_tasks = sorted(
+                tasks,
+                key=lambda t: date_pattern.search(t).group(1) if date_pattern.search(t) else "",
+                reverse=True
+            )
+
+            for task in sorted_tasks:
+                lines.append(task)
+
+            lines.append("")
+
+    return '\n'.join(lines)
+
+
+def remove_completed_tasks_from_content(
+    content: str,
+    completed_tasks: Dict[str, Dict[str, List[str]]]
+) -> str:
+    """Remove completed tasks from AGENDA.md content after they've been logged.
+
+    Args:
+        content: Current AGENDA.md content
+        completed_tasks: Dict mapping item titles to dict of dates to tasks
+
+    Returns:
+        Updated content with completed tasks removed
+    """
+    if not completed_tasks:
+        return content
+
+    # Build set of task lines to remove (for efficient lookup)
+    tasks_to_remove = set()
+    for date_tasks in completed_tasks.values():
+        for tasks in date_tasks.values():
+            for task in tasks:
+                tasks_to_remove.add(task)
+
+    # Filter out completed tasks
+    lines = content.split('\n')
+    filtered_lines = []
+
+    for line in lines:
+        # Keep line if it's not a completed task to remove
+        if not (line.startswith('- [x]') and line in tasks_to_remove):
+            filtered_lines.append(line)
+
+    return '\n'.join(filtered_lines)
+
+
+def process_logbook(base_path: Path) -> Tuple[int, int]:
+    """Process completed tasks: extract, log to LOGBOOK.md, remove from AGENDA.md.
+
+    This is the main entry point for logbook functionality. It:
+    1. Reads AGENDA.md
+    2. Extracts completed tasks with dates (from tracked items + other sections)
+    3. Appends them to top-level LOGBOOK.md organized by week and initiative
+    4. Removes them from AGENDA.md
+
+    Args:
+        base_path: Base directory
+
+    Returns:
+        Tuple of (total_tasks_logged, initiatives_logged)
+    """
+    agenda_file = base_path / "AGENDA.md"
+    if not agenda_file.exists():
+        return (0, 0)
+
+    content = agenda_file.read_text()
+
+    # Extract completed tasks
+    completed_tasks = extract_completed_tasks(content)
+    if not completed_tasks:
+        return (0, 0)
+
+    # Append to logbook
+    logged_count, initiatives_logged = append_to_logbook(completed_tasks, base_path)
+
+    if logged_count > 0:
+        # Remove from agenda
+        updated_content = remove_completed_tasks_from_content(content, completed_tasks)
+        agenda_file.write_text(updated_content)
+        print(f"📓 Logged {logged_count} completed task(s) to LOGBOOK.md")
+        print(f"🧹 Removed {logged_count} completed task(s) from AGENDA.md")
+
+    return (logged_count, initiatives_logged)
