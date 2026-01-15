@@ -6,6 +6,7 @@ from typing import Any, Dict
 import yaml
 
 from cli.adapters.jira import JiraAdapter
+from cli.adapters.misc import MiscAdapter
 
 
 def load_config(base_path: Path) -> Dict[str, Any]:
@@ -97,11 +98,47 @@ def sync_jira(base_path: Path) -> None:
     print("\n✓ Jira sync complete!")
 
 
+def sync_misc(base_path: Path) -> None:
+    """Sync misc items and ensure README files exist.
+
+    Args:
+        base_path: Base directory for gameplan repository
+    """
+    config = load_config(base_path)
+
+    misc_config = config.get("areas", {}).get("misc", {})
+    if not misc_config:
+        return
+
+    adapter = MiscAdapter(misc_config, base_path)
+    tracked_items = adapter.load_config(misc_config)
+
+    if not tracked_items:
+        return
+
+    print(f"\nFound {len(tracked_items)} misc item(s)")
+    print("Checking misc items...")
+
+    for item in tracked_items:
+        print(f"  Checking {item.id}...")
+
+        data = adapter.fetch_item_data(item)
+        readme_path = adapter.get_storage_path(item, title=data.title)
+
+        if readme_path.exists():
+            print(f"    ✓ {data.title}")
+        else:
+            print(f"    + Creating {data.title}")
+            adapter.update_readme(readme_path, data, item)
+
+    print("\n✓ Misc sync complete!")
+
+
 def sync_all(base_path: Path) -> None:
     """Sync all configured adapters.
 
     Args:
         base_path: Base directory for gameplan repository
     """
-    # For now, only Jira is implemented
     sync_jira(base_path)
+    sync_misc(base_path)
