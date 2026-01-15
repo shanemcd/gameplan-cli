@@ -360,17 +360,19 @@ def _update_command_section(content: str, section: Dict[str, Any], base_path: Pa
 
 
 def format_tracked_items(base_path: Optional[Path] = None) -> str:
-    """Format tracked items with current status and preserved Actions/Notes.
+    """Format tracked items in slim format using adapters.
 
-    Reads status/title from tracking files created by sync, and preserves
-    Actions/Notes subsections from existing AGENDA.md.
+    Each adapter defines how its items are formatted for the agenda.
 
     Args:
         base_path: Base directory (default: current directory)
 
     Returns:
-        Markdown-formatted tracked items with status, Actions, and Notes
+        Markdown-formatted tracked items in slim format
     """
+    from cli.adapters.jira import JiraAdapter
+    from cli.adapters.misc import MiscAdapter
+
     if base_path is None:
         base_path = Path.cwd()
 
@@ -381,34 +383,28 @@ def format_tracked_items(base_path: Optional[Path] = None) -> str:
     with open(config_file) as f:
         config = yaml.safe_load(f)
 
-    # Read current AGENDA.md to extract existing Actions/Notes
-    agenda_file = base_path / "AGENDA.md"
-    existing_subsections = {}
-    if agenda_file.exists():
-        existing_subsections = _extract_tracked_item_subsections(agenda_file.read_text())
-
     areas = config.get("areas", {})
     items_md = []
 
     # Jira items
     jira_area = areas.get("jira", {})
-    jira_items = jira_area.get("items", [])
+    if jira_area:
+        jira_adapter = JiraAdapter(jira_area, base_path)
+        jira_items = jira_adapter.load_config(jira_area)
 
-    for item in jira_items:
-        issue_key = item.get("issue")
-        if not issue_key:
-            continue
+        for item in jira_items:
+            item_md = jira_adapter.format_agenda_item(item)
+            items_md.append(item_md)
 
-        # Read status from tracking file
-        status_info = _read_jira_status(base_path, issue_key)
+    # Misc items
+    misc_area = areas.get("misc", {})
+    if misc_area:
+        misc_adapter = MiscAdapter(misc_area, base_path)
+        misc_items = misc_adapter.load_config(misc_area)
 
-        # Generate item markdown
-        item_md = _format_single_tracked_item(
-            issue_key,
-            status_info,
-            existing_subsections.get(issue_key, {})
-        )
-        items_md.append(item_md)
+        for item in misc_items:
+            item_md = misc_adapter.format_agenda_item(item)
+            items_md.append(item_md)
 
     if not items_md:
         return "_No tracked items_"
