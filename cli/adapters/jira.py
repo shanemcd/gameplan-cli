@@ -10,6 +10,8 @@ Requirements:
 - jirahhh binary must be in PATH or configured via binary_path
 """
 import json
+import logging
+import os
 import re
 import subprocess
 from datetime import datetime
@@ -17,6 +19,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import yaml
+
+logger = logging.getLogger(__name__)
 
 from cli.adapters.base import Adapter, ItemData, TrackedItem, sanitize_title_for_path
 
@@ -137,19 +141,28 @@ class JiraAdapter(Adapter):
             ItemData with title, status, and raw Jira data including comments
         """
         issue_key = item.metadata.get("issue") or item.id
-        env = item.metadata.get("env", "prod")
+        jira_env = item.metadata.get("env", "prod")
 
         # Call jirahhh API to get full issue data
         jirahhh_command = self._get_command("jirahhh")
-        cmd = [jirahhh_command, "api", "GET", f"/rest/api/2/issue/{issue_key}", "--env", env]
+        cmd = [jirahhh_command, "api", "GET", f"/rest/api/2/issue/{issue_key}", "--env", jira_env]
 
+        logger.debug("Executing: %s", " ".join(cmd))
+        # Propagate current log level to jirahhh subprocess
+        subprocess_env = os.environ.copy()
+        subprocess_env["JIRAHHH_LOG_LEVEL"] = logging.getLevelName(logger.getEffectiveLevel())
+        # Let stderr pass through so jirahhh debug logs are visible in real-time
         result = subprocess.run(
             cmd,
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=None,  # Inherit stderr - shows jirahhh logs in real-time
             text=True,
+            env=subprocess_env,
         )
+        logger.debug("Command completed with return code %d", result.returncode)
 
         if result.returncode != 0:
+            logger.debug("Command stderr: %s", result.stderr)
             # Return empty data on error
             return ItemData(
                 title="",
@@ -183,16 +196,20 @@ class JiraAdapter(Adapter):
             status = jira_data.get("status", "")
 
         # Fetch comments
-        comments_cmd = [jirahhh_command, "api", "GET", f"/rest/api/2/issue/{issue_key}/comment", "--env", env]
+        comments_cmd = [jirahhh_command, "api", "GET", f"/rest/api/2/issue/{issue_key}/comment", "--env", jira_env]
 
+        logger.debug("Executing: %s", " ".join(comments_cmd))
         comments_result = subprocess.run(
             comments_cmd,
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=None,  # Inherit stderr - shows jirahhh logs in real-time
             text=True,
+            env=subprocess_env,
         )
+        logger.debug("Command completed with return code %d", comments_result.returncode)
 
         comments_data = {}
-        if comments_result.returncode == 0:
+        if comments_result and comments_result.returncode == 0:
             try:
                 comments_data = json.loads(comments_result.stdout)
             except json.JSONDecodeError:

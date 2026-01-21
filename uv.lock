@@ -215,7 +215,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "jirahhh", git = "https://github.com/shanemcd/jirahhh" },
+    { name = "jirahhh", editable = "../../../../../../home/shanemcd/github/shanemcd/jirahhh" },
     { name = "marko", specifier = ">=2.0.0" },
     { name = "pypandoc", specifier = ">=1.13" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.4.0" },
@@ -264,11 +264,18 @@ wheels = [
 [[package]]
 name = "jirahhh"
 version = "0.1.0"
-source = { git = "https://github.com/shanemcd/jirahhh#d323c2f6a7006b2574be24b2339332db44b0e368" }
+source = { editable = "../../../../../../home/shanemcd/github/shanemcd/jirahhh" }
 dependencies = [
     { name = "jira" },
     { name = "pypandoc" },
     { name = "pyyaml" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "jira", specifier = ">=3.5.0" },
+    { name = "pypandoc", specifier = ">=1.11" },
+    { name = "pyyaml", specifier = ">=6.0" },
 ]
 
 [[package]]
