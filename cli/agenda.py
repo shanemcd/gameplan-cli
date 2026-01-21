@@ -327,7 +327,6 @@ def _update_command_section(content: str, section: Dict[str, Any], base_path: Pa
             shell=True,
             capture_output=True,
             text=True,
-            timeout=30,
             cwd=str(base_path),
             env=env,
         )

@@ -147,7 +147,6 @@ class JiraAdapter(Adapter):
             cmd,
             capture_output=True,
             text=True,
-            timeout=30,
         )
 
         if result.returncode != 0:
@@ -190,7 +189,6 @@ class JiraAdapter(Adapter):
             comments_cmd,
             capture_output=True,
             text=True,
-            timeout=30,
         )
 
         comments_data = {}
