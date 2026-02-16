@@ -1,4 +1,5 @@
 """Main CLI entry point for gameplan."""
+
 import argparse
 import os
 import sys
@@ -88,7 +89,7 @@ def cmd_sync(args):
     """Execute sync command."""
     try:
         base_path = get_base_path()
-        source = args.source if hasattr(args, 'source') else None
+        source = args.source if hasattr(args, "source") else None
 
         if source == "jira":
             print("=" * 60)
@@ -103,6 +104,27 @@ def cmd_sync(args):
             print("=" * 60)
             print()
             sync.sync_all(base_path)
+    except Exception as e:
+        print(f"❌ Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+def cmd_jira(args):
+    """Execute jira subcommands."""
+    try:
+        base_path = get_base_path()
+
+        if args.jira_command == "populate":
+            print("=" * 60)
+            print("Jira Populate Items")
+            print("=" * 60)
+            print()
+            jql = args.jql if hasattr(args, "jql") else None
+            env = args.env if hasattr(args, "env") else None
+            sync.populate_jira_items(base_path, jql=jql, env=env)
+        else:
+            print("Unknown jira command", file=sys.stderr)
+            sys.exit(1)
     except Exception as e:
         print(f"❌ Error: {e}", file=sys.stderr)
         sys.exit(1)
@@ -146,9 +168,7 @@ def main():
     )
 
     # Set default to show help if no subcommand given
-    agenda_parser.set_defaults(
-        func=lambda args: (agenda_parser.print_help(), sys.exit(1))
-    )
+    agenda_parser.set_defaults(func=lambda args: (agenda_parser.print_help(), sys.exit(1)))
 
     # agenda init
     init_agenda_parser = agenda_subparsers.add_parser(
@@ -190,6 +210,34 @@ def main():
         help="Source to sync (default: all)",
     )
     sync_parser.set_defaults(func=cmd_sync)
+
+    # Jira command
+    jira_parser = subparsers.add_parser(
+        "jira",
+        help="Jira-specific commands",
+    )
+    jira_subparsers = jira_parser.add_subparsers(
+        dest="jira_command",
+        help="Jira commands",
+    )
+
+    # Set default to show help if no subcommand given
+    jira_parser.set_defaults(func=lambda args: (jira_parser.print_help(), sys.exit(1)))
+
+    # jira populate
+    populate_parser = jira_subparsers.add_parser(
+        "populate",
+        help="Populate tracked items from a JQL search",
+    )
+    populate_parser.add_argument(
+        "--jql",
+        help="JQL query (overrides areas.jira.search in gameplan.yaml)",
+    )
+    populate_parser.add_argument(
+        "--env",
+        help="Jira environment (overrides areas.jira.env in gameplan.yaml)",
+    )
+    populate_parser.set_defaults(func=cmd_jira)
 
     args = parser.parse_args()
 

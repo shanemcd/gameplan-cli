@@ -9,6 +9,7 @@ Requirements:
   (JIRA_URL, JIRA_EMAIL, JIRA_API_TOKEN)
 - jirahhh binary must be in PATH or configured via binary_path
 """
+
 import json
 import re
 import subprocess
@@ -20,6 +21,7 @@ from cli.adapters.base import Adapter, ItemData, TrackedItem, sanitize_title_for
 
 try:
     import pypandoc
+
     PANDOC_AVAILABLE = True
 except ImportError:
     PANDOC_AVAILABLE = False
@@ -54,9 +56,61 @@ class JiraAdapter(Adapter):
 
         return tracked_items
 
-    def fetch_item_data(
-        self, item: TrackedItem, since: Optional[str] = None
-    ) -> ItemData:
+    def search_issues(self, jql: str, env: str, max_results: int = 50) -> List[TrackedItem]:
+        """Search for Jira issues using JQL via jirahhh search.
+
+        Args:
+            jql: JQL query string
+            env: Jira environment name (e.g., 'prod', 'staging')
+            max_results: Maximum number of results to return
+
+        Returns:
+            List of TrackedItem objects for matching issues
+        """
+        jirahhh_command = self._get_command("jirahhh")
+        cmd = [
+            jirahhh_command,
+            "search",
+            jql,
+            "--env",
+            env,
+            "--max-results",
+            str(max_results),
+        ]
+
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+
+        if result.returncode != 0:
+            return []
+
+        try:
+            search_data = json.loads(result.stdout)
+        except json.JSONDecodeError:
+            return []
+
+        issues = search_data.get("issues", [])
+        tracked_items = []
+
+        for issue in issues:
+            issue_key = issue.get("key", "")
+            if not issue_key:
+                continue
+            tracked_items.append(
+                TrackedItem(
+                    id=issue_key,
+                    adapter="jira",
+                    metadata={"issue": issue_key, "env": env},
+                )
+            )
+
+        return tracked_items
+
+    def fetch_item_data(self, item: TrackedItem, since: Optional[str] = None) -> ItemData:
         """Fetch Jira issue data via jirahhh CLI.
 
         Args:
@@ -82,21 +136,13 @@ class JiraAdapter(Adapter):
 
         if result.returncode != 0:
             # Return empty data on error
-            return ItemData(
-                title="",
-                status="",
-                raw_data={}
-            )
+            return ItemData(title="", status="", raw_data={})
 
         # Parse JSON response
         try:
             jira_data = json.loads(result.stdout)
         except json.JSONDecodeError:
-            return ItemData(
-                title="",
-                status="",
-                raw_data={}
-            )
+            return ItemData(title="", status="", raw_data={})
 
         # Extract fields
         title = ""
@@ -114,7 +160,14 @@ class JiraAdapter(Adapter):
             status = jira_data.get("status", "")
 
         # Fetch comments
-        comments_cmd = [jirahhh_command, "api", "GET", f"/rest/api/2/issue/{issue_key}/comment", "--env", env]
+        comments_cmd = [
+            jirahhh_command,
+            "api",
+            "GET",
+            f"/rest/api/2/issue/{issue_key}/comment",
+            "--env",
+            env,
+        ]
 
         comments_result = subprocess.run(
             comments_cmd,
@@ -139,9 +192,7 @@ class JiraAdapter(Adapter):
             raw_data=jira_data,
         )
 
-    def get_storage_path(
-        self, item: TrackedItem, title: Optional[str] = None
-    ) -> Path:
+    def get_storage_path(self, item: TrackedItem, title: Optional[str] = None) -> Path:
         """Get README.md path for this Jira issue.
 
         Args:
@@ -160,18 +211,9 @@ class JiraAdapter(Adapter):
         else:
             dir_name = issue_key
 
-        return (
-            self.base_path
-            / "tracking"
-            / "areas"
-            / "jira"
-            / dir_name
-            / "README.md"
-        )
+        return self.base_path / "tracking" / "areas" / "jira" / dir_name / "README.md"
 
-    def update_readme(
-        self, readme_path: Path, data: ItemData, item: TrackedItem
-    ) -> None:
+    def update_readme(self, readme_path: Path, data: ItemData, item: TrackedItem) -> None:
         """Update README.md with Jira data.
 
         Updates Title, Status and Assignee fields while preserving all manual content.
@@ -204,9 +246,7 @@ class JiraAdapter(Adapter):
 
         readme_path.write_text(content)
 
-    def _create_new_readme(
-        self, issue_key: str, data: ItemData, assignee: str
-    ) -> str:
+    def _create_new_readme(self, issue_key: str, data: ItemData, assignee: str) -> str:
         """Create new README.md content.
 
         Args:
@@ -229,9 +269,7 @@ class JiraAdapter(Adapter):
 [Add notes, decisions, and important information here]
 """
 
-    def _update_existing_readme(
-        self, content: str, data: ItemData, assignee: str
-    ) -> str:
+    def _update_existing_readme(self, content: str, data: ItemData, assignee: str) -> str:
         """Update existing README.md content.
 
         Updates Title, Status, Assignee, and Activity Log while preserving manual content.
@@ -250,11 +288,7 @@ class JiraAdapter(Adapter):
         if issue_key_match:
             issue_key = issue_key_match.group(1)
             content = re.sub(
-                title_pattern,
-                f"# {issue_key}: {data.title}",
-                content,
-                count=1,
-                flags=re.MULTILINE
+                title_pattern, f"# {issue_key}: {data.title}", content, count=1, flags=re.MULTILINE
             )
 
         # Update Status field
@@ -309,8 +343,7 @@ class JiraAdapter(Adapter):
         """
         # Find Activity Log section
         activity_log_pattern = re.compile(
-            r"^## Activity Log\s*\n.*?(?=\n## |\Z)",
-            re.MULTILINE | re.DOTALL
+            r"^## Activity Log\s*\n.*?(?=\n## |\Z)", re.MULTILINE | re.DOTALL
         )
 
         match = activity_log_pattern.search(content)

@@ -3,6 +3,7 @@
 The Jira adapter integrates with Jira via the jirahhh CLI tool
 (https://github.com/shanemcd/jirahhh).
 """
+
 import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -39,11 +40,7 @@ class TestJiraConfigLoading:
 
     def test_load_config_parses_single_item(self, temp_dir):
         """load_config parses single Jira item."""
-        config = {
-            "items": [
-                {"issue": "PROJ-123", "env": "prod"}
-            ]
-        }
+        config = {"items": [{"issue": "PROJ-123", "env": "prod"}]}
         adapter = JiraAdapter(config, temp_dir)
         items = adapter.load_config(config)
 
@@ -59,7 +56,7 @@ class TestJiraConfigLoading:
             "items": [
                 {"issue": "PROJ-123", "env": "prod"},
                 {"issue": "PROJ-456", "env": "stage"},
-                {"issue": "PROJ-789", "env": "prod"}
+                {"issue": "PROJ-789", "env": "prod"},
             ]
         }
         adapter = JiraAdapter(config, temp_dir)
@@ -89,26 +86,23 @@ class TestJiraFetchItemData:
         mock_run.side_effect = [
             MagicMock(
                 returncode=0,
-                stdout=json.dumps({
-                    "fields": {
-                        "summary": "Test Issue",
-                        "status": {"name": "In Progress"},
-                        "assignee": {"displayName": "testuser"},
-                        "updated": "2025-01-01T00:00:00.000+0000"
+                stdout=json.dumps(
+                    {
+                        "fields": {
+                            "summary": "Test Issue",
+                            "status": {"name": "In Progress"},
+                            "assignee": {"displayName": "testuser"},
+                            "updated": "2025-01-01T00:00:00.000+0000",
+                        }
                     }
-                })
+                ),
             ),
-            MagicMock(
-                returncode=0,
-                stdout=json.dumps({"comments": []})
-            )
+            MagicMock(returncode=0, stdout=json.dumps({"comments": []})),
         ]
 
         adapter = JiraAdapter({}, temp_dir)
         item = TrackedItem(
-            id="PROJ-123",
-            adapter="jira",
-            metadata={"issue": "PROJ-123", "env": "prod"}
+            id="PROJ-123", adapter="jira", metadata={"issue": "PROJ-123", "env": "prod"}
         )
 
         data = adapter.fetch_item_data(item)
@@ -126,19 +120,19 @@ class TestJiraFetchItemData:
         """fetch_item_data returns ItemData with parsed info."""
         mock_run.return_value = MagicMock(
             returncode=0,
-            stdout=json.dumps({
-                "key": "PROJ-123",
-                "summary": "Fix API Bug",
-                "status": "In Progress",
-                "assignee": "johndoe"
-            })
+            stdout=json.dumps(
+                {
+                    "key": "PROJ-123",
+                    "summary": "Fix API Bug",
+                    "status": "In Progress",
+                    "assignee": "johndoe",
+                }
+            ),
         )
 
         adapter = JiraAdapter({}, temp_dir)
         item = TrackedItem(
-            id="PROJ-123",
-            adapter="jira",
-            metadata={"issue": "PROJ-123", "env": "prod"}
+            id="PROJ-123", adapter="jira", metadata={"issue": "PROJ-123", "env": "prod"}
         )
 
         data = adapter.fetch_item_data(item)
@@ -152,14 +146,12 @@ class TestJiraFetchItemData:
         """fetch_item_data passes env parameter to jirahhh."""
         mock_run.return_value = MagicMock(
             returncode=0,
-            stdout=json.dumps({"key": "PROJ-123", "summary": "Test", "status": "Open"})
+            stdout=json.dumps({"key": "PROJ-123", "summary": "Test", "status": "Open"}),
         )
 
         adapter = JiraAdapter({}, temp_dir)
         item = TrackedItem(
-            id="PROJ-123",
-            adapter="jira",
-            metadata={"issue": "PROJ-123", "env": "stage"}
+            id="PROJ-123", adapter="jira", metadata={"issue": "PROJ-123", "env": "stage"}
         )
 
         adapter.fetch_item_data(item)
@@ -174,19 +166,19 @@ class TestJiraFetchItemData:
         """fetch_item_data handles Jira issues without assignee."""
         mock_run.return_value = MagicMock(
             returncode=0,
-            stdout=json.dumps({
-                "key": "PROJ-123",
-                "summary": "Unassigned Issue",
-                "status": "Open",
-                "assignee": None
-            })
+            stdout=json.dumps(
+                {
+                    "key": "PROJ-123",
+                    "summary": "Unassigned Issue",
+                    "status": "Open",
+                    "assignee": None,
+                }
+            ),
         )
 
         adapter = JiraAdapter({}, temp_dir)
         item = TrackedItem(
-            id="PROJ-123",
-            adapter="jira",
-            metadata={"issue": "PROJ-123", "env": "prod"}
+            id="PROJ-123", adapter="jira", metadata={"issue": "PROJ-123", "env": "prod"}
         )
 
         data = adapter.fetch_item_data(item)
@@ -202,9 +194,7 @@ class TestJiraStoragePath:
         """get_storage_path uses issue key in path."""
         adapter = JiraAdapter({}, temp_dir)
         item = TrackedItem(
-            id="PROJ-123",
-            adapter="jira",
-            metadata={"issue": "PROJ-123", "env": "prod"}
+            id="PROJ-123", adapter="jira", metadata={"issue": "PROJ-123", "env": "prod"}
         )
 
         path = adapter.get_storage_path(item)
@@ -216,9 +206,7 @@ class TestJiraStoragePath:
         """get_storage_path includes sanitized title in directory name."""
         adapter = JiraAdapter({}, temp_dir)
         item = TrackedItem(
-            id="PROJ-123",
-            adapter="jira",
-            metadata={"issue": "PROJ-123", "env": "prod"}
+            id="PROJ-123", adapter="jira", metadata={"issue": "PROJ-123", "env": "prod"}
         )
 
         path = adapter.get_storage_path(item, title="Fix: API Bug (Critical!)")
@@ -230,9 +218,7 @@ class TestJiraStoragePath:
         """get_storage_path follows tracking/areas/jira/ structure."""
         adapter = JiraAdapter({}, temp_dir)
         item = TrackedItem(
-            id="PROJ-123",
-            adapter="jira",
-            metadata={"issue": "PROJ-123", "env": "prod"}
+            id="PROJ-123", adapter="jira", metadata={"issue": "PROJ-123", "env": "prod"}
         )
 
         path = adapter.get_storage_path(item, title="Test Issue")
@@ -248,15 +234,9 @@ class TestJiraUpdateReadme:
         """update_readme creates README.md if it doesn't exist."""
         adapter = JiraAdapter({}, temp_dir)
         item = TrackedItem(
-            id="PROJ-123",
-            adapter="jira",
-            metadata={"issue": "PROJ-123", "env": "prod"}
+            id="PROJ-123", adapter="jira", metadata={"issue": "PROJ-123", "env": "prod"}
         )
-        data = ItemData(
-            title="Test Issue",
-            status="In Progress",
-            raw_data={"assignee": "johndoe"}
-        )
+        data = ItemData(title="Test Issue", status="In Progress", raw_data={"assignee": "johndoe"})
         readme_path = temp_dir / "README.md"
 
         adapter.update_readme(readme_path, data, item)
@@ -270,11 +250,7 @@ class TestJiraUpdateReadme:
         """update_readme includes status field."""
         adapter = JiraAdapter({}, temp_dir)
         item = TrackedItem(id="PROJ-123", adapter="jira", metadata={})
-        data = ItemData(
-            title="Test Issue",
-            status="In Progress",
-            raw_data={"assignee": "johndoe"}
-        )
+        data = ItemData(title="Test Issue", status="In Progress", raw_data={"assignee": "johndoe"})
         readme_path = temp_dir / "README.md"
 
         adapter.update_readme(readme_path, data, item)
@@ -290,13 +266,7 @@ class TestJiraUpdateReadme:
         data = ItemData(
             title="Test Issue",
             status="Open",
-            raw_data={
-                "fields": {
-                    "assignee": {
-                        "displayName": "johndoe"
-                    }
-                }
-            }
+            raw_data={"fields": {"assignee": {"displayName": "johndoe"}}},
         )
         readme_path = temp_dir / "README.md"
 
@@ -313,13 +283,7 @@ class TestJiraUpdateReadme:
         data = ItemData(
             title="Test Issue",
             status="Open",
-            raw_data={
-                "fields": {
-                    "assignee": {
-                        "displayName": "Vibe Coder 1.z3r0"
-                    }
-                }
-            }
+            raw_data={"fields": {"assignee": {"displayName": "Vibe Coder 1.z3r0"}}},
         )
         readme_path = temp_dir / "README.md"
 
@@ -334,11 +298,7 @@ class TestJiraUpdateReadme:
         """update_readme can be run multiple times with same result."""
         adapter = JiraAdapter({}, temp_dir)
         item = TrackedItem(id="PROJ-123", adapter="jira", metadata={})
-        data = ItemData(
-            title="Test Issue",
-            status="In Progress",
-            raw_data={"assignee": "johndoe"}
-        )
+        data = ItemData(title="Test Issue", status="In Progress", raw_data={"assignee": "johndoe"})
         readme_path = temp_dir / "README.md"
 
         # First update
@@ -377,13 +337,7 @@ This is manually written context that should be preserved.
         data = ItemData(
             title="Test Issue",
             status="In Progress",
-            raw_data={
-                "fields": {
-                    "assignee": {
-                        "displayName": "johndoe"
-                    }
-                }
-            }
+            raw_data={"fields": {"assignee": {"displayName": "johndoe"}}},
         )
         adapter.update_readme(readme_path, data, item)
 
@@ -406,7 +360,9 @@ class TestJiraErrorHandling:
         mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="Error")
 
         adapter = JiraAdapter({}, temp_dir)
-        item = TrackedItem(id="PROJ-123", adapter="jira", metadata={"issue": "PROJ-123", "env": "prod"})
+        item = TrackedItem(
+            id="PROJ-123", adapter="jira", metadata={"issue": "PROJ-123", "env": "prod"}
+        )
 
         data = adapter.fetch_item_data(item)
 
@@ -420,7 +376,9 @@ class TestJiraErrorHandling:
         mock_run.return_value = MagicMock(returncode=0, stdout="not valid json")
 
         adapter = JiraAdapter({}, temp_dir)
-        item = TrackedItem(id="PROJ-123", adapter="jira", metadata={"issue": "PROJ-123", "env": "prod"})
+        item = TrackedItem(
+            id="PROJ-123", adapter="jira", metadata={"issue": "PROJ-123", "env": "prod"}
+        )
 
         data = adapter.fetch_item_data(item)
 
@@ -434,18 +392,17 @@ class TestJiraErrorHandling:
         mock_run.side_effect = [
             MagicMock(
                 returncode=0,
-                stdout=json.dumps({
-                    "fields": {
-                        "summary": "Test Issue",
-                        "status": {"name": "Open"}
-                    }
-                })
+                stdout=json.dumps(
+                    {"fields": {"summary": "Test Issue", "status": {"name": "Open"}}}
+                ),
             ),
-            MagicMock(returncode=0, stdout="invalid json")
+            MagicMock(returncode=0, stdout="invalid json"),
         ]
 
         adapter = JiraAdapter({}, temp_dir)
-        item = TrackedItem(id="PROJ-123", adapter="jira", metadata={"issue": "PROJ-123", "env": "prod"})
+        item = TrackedItem(
+            id="PROJ-123", adapter="jira", metadata={"issue": "PROJ-123", "env": "prod"}
+        )
 
         data = adapter.fetch_item_data(item)
 
@@ -476,7 +433,7 @@ class TestJiraMetadata:
         data = ItemData(
             title="Test Issue",
             status="Open",
-            raw_data={"fields": {"updated": "2025-01-15T10:00:00.000+0000"}}
+            raw_data={"fields": {"updated": "2025-01-15T10:00:00.000+0000"}},
         )
 
         adapter.save_metadata(readme_path, data)
@@ -493,7 +450,7 @@ class TestJiraMetadata:
         data = ItemData(
             title="Test Issue",
             status="Open",
-            raw_data={"fields": {"updated": "2025-01-15T10:00:00.000+0000"}}
+            raw_data={"fields": {"updated": "2025-01-15T10:00:00.000+0000"}},
         )
 
         adapter.save_metadata(readme_path, data)
@@ -567,7 +524,7 @@ class TestJiraChangeDetection:
         data = ItemData(
             title="Test",
             status="Open",
-            raw_data={"fields": {"updated": "2025-01-15T10:00:00.000+0000"}}
+            raw_data={"fields": {"updated": "2025-01-15T10:00:00.000+0000"}},
         )
 
         has_changes = adapter.detect_changes(readme_path, data)
@@ -589,7 +546,7 @@ class TestJiraChangeDetection:
         data = ItemData(
             title="Test",
             status="Open",
-            raw_data={"fields": {"updated": "2025-01-15T10:00:00.000+0000"}}
+            raw_data={"fields": {"updated": "2025-01-15T10:00:00.000+0000"}},
         )
 
         has_changes = adapter.detect_changes(readme_path, data)
@@ -611,7 +568,7 @@ class TestJiraChangeDetection:
         data = ItemData(
             title="Test",
             status="In Progress",
-            raw_data={"fields": {"updated": "2025-01-16T10:00:00.000+0000"}}
+            raw_data={"fields": {"updated": "2025-01-16T10:00:00.000+0000"}},
         )
 
         has_changes = adapter.detect_changes(readme_path, data)
@@ -627,20 +584,13 @@ class TestJirahhhCustomCommand:
         """Uses 'jirahhh' command when no custom command configured."""
         mock_run.return_value = MagicMock(
             returncode=0,
-            stdout=json.dumps({
-                "fields": {
-                    "summary": "Test Issue",
-                    "status": {"name": "Open"}
-                }
-            })
+            stdout=json.dumps({"fields": {"summary": "Test Issue", "status": {"name": "Open"}}}),
         )
 
         # No command in config
         adapter = JiraAdapter({}, temp_dir)
         item = TrackedItem(
-            id="PROJ-123",
-            adapter="jira",
-            metadata={"issue": "PROJ-123", "env": "prod"}
+            id="PROJ-123", adapter="jira", metadata={"issue": "PROJ-123", "env": "prod"}
         )
 
         adapter.fetch_item_data(item)
@@ -654,21 +604,14 @@ class TestJirahhhCustomCommand:
         """Uses custom command when command configured."""
         mock_run.return_value = MagicMock(
             returncode=0,
-            stdout=json.dumps({
-                "fields": {
-                    "summary": "Test Issue",
-                    "status": {"name": "Open"}
-                }
-            })
+            stdout=json.dumps({"fields": {"summary": "Test Issue", "status": {"name": "Open"}}}),
         )
 
         # Custom command in config
         config = {"command": "/custom/path/to/jirahhh"}
         adapter = JiraAdapter(config, temp_dir)
         item = TrackedItem(
-            id="PROJ-123",
-            adapter="jira",
-            metadata={"issue": "PROJ-123", "env": "prod"}
+            id="PROJ-123", adapter="jira", metadata={"issue": "PROJ-123", "env": "prod"}
         )
 
         adapter.fetch_item_data(item)
@@ -683,25 +626,17 @@ class TestJirahhhCustomCommand:
         mock_run.side_effect = [
             MagicMock(
                 returncode=0,
-                stdout=json.dumps({
-                    "fields": {
-                        "summary": "Test Issue",
-                        "status": {"name": "Open"}
-                    }
-                })
+                stdout=json.dumps(
+                    {"fields": {"summary": "Test Issue", "status": {"name": "Open"}}}
+                ),
             ),
-            MagicMock(
-                returncode=0,
-                stdout=json.dumps({"comments": []})
-            )
+            MagicMock(returncode=0, stdout=json.dumps({"comments": []})),
         ]
 
         config = {"command": "/usr/local/bin/jirahhh"}
         adapter = JiraAdapter(config, temp_dir)
         item = TrackedItem(
-            id="PROJ-123",
-            adapter="jira",
-            metadata={"issue": "PROJ-123", "env": "prod"}
+            id="PROJ-123", adapter="jira", metadata={"issue": "PROJ-123", "env": "prod"}
         )
 
         adapter.fetch_item_data(item)
@@ -718,20 +653,13 @@ class TestJirahhhCustomCommand:
         """Supports relative paths for command."""
         mock_run.return_value = MagicMock(
             returncode=0,
-            stdout=json.dumps({
-                "fields": {
-                    "summary": "Test Issue",
-                    "status": {"name": "Open"}
-                }
-            })
+            stdout=json.dumps({"fields": {"summary": "Test Issue", "status": {"name": "Open"}}}),
         )
 
         config = {"command": "./bin/jirahhh"}
         adapter = JiraAdapter(config, temp_dir)
         item = TrackedItem(
-            id="PROJ-123",
-            adapter="jira",
-            metadata={"issue": "PROJ-123", "env": "prod"}
+            id="PROJ-123", adapter="jira", metadata={"issue": "PROJ-123", "env": "prod"}
         )
 
         adapter.fetch_item_data(item)
@@ -762,11 +690,7 @@ Old activity here
 ## Notes
 Notes here
 """
-        data = ItemData(
-            title="Test",
-            status="Open",
-            raw_data={"comments": {"comments": []}}
-        )
+        data = ItemData(title="Test", status="Open", raw_data={"comments": {"comments": []}})
 
         result = adapter._update_activity_log(content, data)
 
@@ -798,11 +722,11 @@ Notes
                         {
                             "author": {"displayName": "John Doe"},
                             "created": "2025-01-15T10:00:00.000Z",
-                            "body": "This is a test comment"
+                            "body": "This is a test comment",
                         }
                     ]
                 }
-            }
+            },
         )
 
         result = adapter._update_activity_log(content, data)
@@ -832,6 +756,7 @@ No activity log section
         """_convert_jira_to_markdown returns original text if pandoc unavailable."""
         # Simulate PANDOC_AVAILABLE = False
         import cli.adapters.jira as jira_module
+
         monkeypatch.setattr(jira_module, "PANDOC_AVAILABLE", False)
 
         adapter = JiraAdapter({}, temp_dir)
@@ -855,6 +780,7 @@ No activity log section
         """_convert_jira_to_markdown returns original text on conversion error."""
         # Simulate pypandoc available but conversion fails
         import cli.adapters.jira as jira_module
+
         jira_module.PANDOC_AVAILABLE = True
 
         mock_pypandoc.convert_text.side_effect = Exception("Conversion failed")
@@ -865,3 +791,123 @@ No activity log section
         result = adapter._convert_jira_to_markdown(jira_text)
 
         assert result == jira_text
+
+
+class TestJiraSearchIssues:
+    """Test searching for Jira issues via jirahhh search."""
+
+    @patch("subprocess.run")
+    def test_search_issues_calls_jirahhh_search(self, mock_run, temp_dir):
+        """search_issues calls jirahhh search with correct arguments."""
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout=json.dumps(
+                {
+                    "total": 1,
+                    "issues": [{"key": "PROJ-123", "summary": "Test Issue", "status": "Open"}],
+                }
+            ),
+        )
+
+        adapter = JiraAdapter({}, temp_dir)
+        jql = "assignee = currentUser() AND statusCategory != Done"
+        result = adapter.search_issues(jql=jql, env="prod")
+
+        mock_run.assert_called_once()
+        call_args = mock_run.call_args[0][0]
+        assert call_args[0] == "jirahhh"
+        assert "search" in call_args
+        assert jql in call_args
+        assert "--env" in call_args
+        assert "prod" in call_args
+
+    @patch("subprocess.run")
+    def test_search_issues_returns_list_of_tracked_items(self, mock_run, temp_dir):
+        """search_issues returns list of TrackedItem objects."""
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout=json.dumps(
+                {
+                    "total": 2,
+                    "issues": [
+                        {"key": "PROJ-123", "summary": "First Issue", "status": "In Progress"},
+                        {"key": "PROJ-456", "summary": "Second Issue", "status": "Open"},
+                    ],
+                }
+            ),
+        )
+
+        adapter = JiraAdapter({}, temp_dir)
+        items = adapter.search_issues(
+            jql="assignee = currentUser()",
+            env="prod",
+        )
+
+        assert len(items) == 2
+        assert items[0].id == "PROJ-123"
+        assert items[0].adapter == "jira"
+        assert items[0].metadata["issue"] == "PROJ-123"
+        assert items[0].metadata["env"] == "prod"
+        assert items[1].id == "PROJ-456"
+        assert items[1].metadata["issue"] == "PROJ-456"
+        assert items[1].metadata["env"] == "prod"
+
+    @patch("subprocess.run")
+    def test_search_issues_uses_custom_command(self, mock_run, temp_dir):
+        """search_issues uses custom jirahhh command if configured."""
+        mock_run.return_value = MagicMock(
+            returncode=0, stdout=json.dumps({"total": 0, "issues": []})
+        )
+
+        config = {"command": "/custom/jirahhh"}
+        adapter = JiraAdapter(config, temp_dir)
+        adapter.search_issues(jql="project = TEST", env="staging")
+
+        call_args = mock_run.call_args[0][0]
+        assert call_args[0] == "/custom/jirahhh"
+
+    @patch("subprocess.run")
+    def test_search_issues_handles_command_failure(self, mock_run, temp_dir):
+        """search_issues returns empty list on command failure."""
+        mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="Error connecting")
+
+        adapter = JiraAdapter({}, temp_dir)
+        items = adapter.search_issues(jql="project = TEST", env="prod")
+
+        assert items == []
+
+    @patch("subprocess.run")
+    def test_search_issues_handles_invalid_json(self, mock_run, temp_dir):
+        """search_issues returns empty list on invalid JSON response."""
+        mock_run.return_value = MagicMock(returncode=0, stdout="not valid json")
+
+        adapter = JiraAdapter({}, temp_dir)
+        items = adapter.search_issues(jql="project = TEST", env="prod")
+
+        assert items == []
+
+    @patch("subprocess.run")
+    def test_search_issues_handles_empty_results(self, mock_run, temp_dir):
+        """search_issues returns empty list when no issues found."""
+        mock_run.return_value = MagicMock(
+            returncode=0, stdout=json.dumps({"total": 0, "issues": []})
+        )
+
+        adapter = JiraAdapter({}, temp_dir)
+        items = adapter.search_issues(jql="project = NOPE", env="prod")
+
+        assert items == []
+
+    @patch("subprocess.run")
+    def test_search_issues_passes_max_results(self, mock_run, temp_dir):
+        """search_issues passes --max-results to jirahhh."""
+        mock_run.return_value = MagicMock(
+            returncode=0, stdout=json.dumps({"total": 0, "issues": []})
+        )
+
+        adapter = JiraAdapter({}, temp_dir)
+        adapter.search_issues(jql="project = TEST", env="prod", max_results=10)
+
+        call_args = mock_run.call_args[0][0]
+        assert "--max-results" in call_args
+        assert "10" in call_args

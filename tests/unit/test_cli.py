@@ -3,6 +3,7 @@
 These are smoke tests to ensure the CLI structure is correct and
 commands are properly wired up.
 """
+
 import subprocess
 import sys
 from pathlib import Path
@@ -253,3 +254,61 @@ class TestCLICommandRouting:
         captured = capsys.readouterr()
         output = captured.out + captured.err
         assert "usage:" in output.lower()
+
+
+class TestJiraPopulateCommand:
+    """Test 'gameplan jira populate' CLI command."""
+
+    def test_cli_has_jira_command(self):
+        """CLI has 'jira' command."""
+        result = subprocess.run(
+            [sys.executable, "-m", "cli.cli", "jira", "--help"],
+            capture_output=True,
+            text=True,
+        )
+
+        assert result.returncode == 0
+        output = result.stdout + result.stderr
+        assert "populate" in output.lower()
+
+    def test_cli_jira_populate_has_help(self):
+        """CLI 'jira populate' has help text."""
+        result = subprocess.run(
+            [sys.executable, "-m", "cli.cli", "jira", "populate", "--help"],
+            capture_output=True,
+            text=True,
+        )
+
+        assert result.returncode == 0
+        output = result.stdout + result.stderr
+        assert "--jql" in output
+        assert "--env" in output
+
+    @patch("cli.sync.populate_jira_items")
+    @patch("sys.argv", ["gameplan", "jira", "populate"])
+    def test_jira_populate_calls_populate_function(self, mock_populate):
+        """jira populate routes to populate_jira_items."""
+        try:
+            main()
+        except SystemExit:
+            pass
+
+        mock_populate.assert_called_once()
+
+    @patch("cli.sync.populate_jira_items")
+    @patch(
+        "sys.argv", ["gameplan", "jira", "populate", "--jql", "project = TEST", "--env", "staging"]
+    )
+    def test_jira_populate_passes_jql_and_env_overrides(self, mock_populate):
+        """jira populate passes --jql and --env args to populate function."""
+        try:
+            main()
+        except SystemExit:
+            pass
+
+        mock_populate.assert_called_once()
+        call_kwargs = mock_populate.call_args
+        # Check that jql and env were passed
+        assert (
+            call_kwargs[1].get("jql") == "project = TEST" or call_kwargs[0][1] == "project = TEST"
+        )

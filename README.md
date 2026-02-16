@@ -15,7 +15,7 @@
 - 🏠 **Local-first**: All data in markdown files, version controlled with git
 - 🔌 **Pluggable adapters**: Easy integration with any tracking system
 - 📅 **Smart agenda**: Configurable daily agenda with command-driven sections
-- 🧪 **Test-driven**: 126 tests with 90% coverage (exceeds 85% target)
+- 🧪 **Test-driven**: 194 tests with 91% coverage (exceeds 85% target)
 - 📝 **Markdown-based**: Human-readable, greppable, no vendor lock-in
 - 🤖 **AI-friendly**: Comprehensive documentation for AI assistants
 
@@ -66,16 +66,23 @@ gameplan init
 
 ### Configure Tracking
 
-Edit `gameplan.yaml` to add items to track:
+Run `gameplan jira populate` to auto-discover your assigned Jira issues, or edit `gameplan.yaml` manually:
 
 ```yaml
 areas:
   jira:
+    env: "prod"
+    # Optional: customize the JQL used by `gameplan jira populate`
+    # populate:
+    #   search: "assignee = currentUser() AND statusCategory != Done"
     items:
+      # Manually-added items (never removed by populate)
       - issue: "PROJ-123"
         env: "prod"
+      # Items added by `gameplan jira populate` are tagged automatically
       - issue: "PROJ-456"
-        env: "stage"
+        env: "prod"
+        source: populate
 
 agenda:
   sections:
@@ -125,6 +132,10 @@ gameplan agenda refresh           # Update command-driven sections
 # Sync tracked items
 gameplan sync                     # Sync all configured adapters
 gameplan sync jira                # Sync Jira only
+
+# Populate Jira items from a search
+gameplan jira populate            # Uses default or configured JQL
+gameplan jira populate --jql "project = MYPROJ" --env staging
 ```
 
 ### Example Workflow
@@ -134,8 +145,8 @@ gameplan sync jira                # Sync Jira only
 cd ~/projects
 gameplan init
 
-# 2. Configure your items to track (edit gameplan.yaml)
-#    Add Jira issues, configure agenda sections
+# 2. Populate tracked items from Jira (auto-discovers your assigned issues)
+gameplan jira populate
 
 # 3. Create your daily agenda
 gameplan agenda init
@@ -146,6 +157,9 @@ gameplan agenda init
 
 # 5. Sync Jira data
 gameplan sync jira
+
+# 6. Re-run populate to pick up newly assigned issues
+gameplan jira populate
 ```
 
 ---
@@ -262,7 +276,20 @@ Gameplan uses a pluggable adapter architecture. Each adapter integrates with an 
    export JIRA_API_TOKEN="your-token"
    ```
 
-3. **Add items to gameplan.yaml**:
+3. **Populate items from Jira** (recommended):
+   ```bash
+   # Auto-discover issues assigned to you
+   gameplan jira populate
+
+   # Or use a custom JQL query
+   gameplan jira populate --jql "project = MYPROJ AND sprint in openSprints()"
+   ```
+
+   This searches Jira and updates `gameplan.yaml` automatically. Items added
+   by populate are tagged with `source: populate` so they can be refreshed on
+   subsequent runs without affecting manually-added items.
+
+   You can also add items manually to `gameplan.yaml`:
    ```yaml
    areas:
      jira:
@@ -347,7 +374,7 @@ See **[CONTRIBUTING.md](CONTRIBUTING.md)** for detailed guidelines.
 - ✅ Rich tracked items formatting with status emojis
 - ✅ CLI integration with full command routing
 - ✅ Comprehensive documentation (README, ARCHITECTURE, CONTRIBUTING)
-- ✅ 126 tests, 90% coverage (exceeds 85% target)
+- ✅ 194 tests, 91% coverage (exceeds 85% target)
 
 ### Next Steps (Phase 7) ⏳
 
