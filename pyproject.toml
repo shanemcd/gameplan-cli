@@ -21,6 +21,7 @@ classifiers = [
 ]
 dependencies = [
     "pyyaml>=6.0",
+    "ruamel.yaml>=0.18.0",
     "marko>=2.0.0",
     "pypandoc>=1.13",
     "jirahhh @ git+https://github.com/shanemcd/jirahhh",

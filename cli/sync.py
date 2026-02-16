@@ -1,9 +1,11 @@
 """Sync command for pulling data from external systems."""
+
 import sys
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional
 
 import yaml
+from ruamel.yaml import YAML
 
 from cli.adapters.jira import JiraAdapter
 
@@ -25,6 +27,30 @@ def load_config(base_path: Path) -> Dict[str, Any]:
 
     with open(config_file) as f:
         return yaml.safe_load(f)
+
+
+def save_config(base_path: Path, items: List[Dict[str, Any]]) -> None:
+    """Update areas.jira.items in gameplan.yaml while preserving all other content.
+
+    Uses ruamel.yaml to perform a round-trip edit that preserves comments,
+    formatting, emoji, and all non-items sections.
+
+    Args:
+        base_path: Base directory containing gameplan.yaml
+        items: List of item dicts to write to areas.jira.items
+    """
+    config_file = base_path / "gameplan.yaml"
+
+    ryaml = YAML()
+    ryaml.preserve_quotes = True
+
+    with open(config_file) as f:
+        data = ryaml.load(f)
+
+    data["areas"]["jira"]["items"] = items
+
+    with open(config_file, "w") as f:
+        ryaml.dump(data, f)
 
 
 def sync_jira(base_path: Path) -> None:
@@ -105,3 +131,87 @@ def sync_all(base_path: Path) -> None:
     """
     # For now, only Jira is implemented
     sync_jira(base_path)
+
+
+DEFAULT_POPULATE_JQL = "assignee = currentUser() AND statusCategory != Done"
+
+
+def populate_jira_items(
+    base_path: Path,
+    jql: Optional[str] = None,
+    env: Optional[str] = None,
+) -> None:
+    """Populate gameplan.yaml Jira items from a JQL search.
+
+    Runs a JQL search via jirahhh, then merges results into
+    areas.jira.items. Items tagged with source: populate that are no
+    longer in the search results are removed. Manual items (without
+    source: populate) are always preserved.
+
+    Args:
+        base_path: Base directory for gameplan repository
+        jql: JQL query override (defaults to areas.jira.populate.search in config,
+             then DEFAULT_POPULATE_JQL)
+        env: Environment override (defaults to areas.jira.env in config)
+    """
+    config = load_config(base_path)
+
+    jira_config = config.get("areas", {}).get("jira", {})
+    if not jira_config:
+        print("⚠️  No Jira configuration found in gameplan.yaml!")
+        return
+
+    populate_config = jira_config.get("populate", {})
+
+    # Resolve JQL: CLI override > config > default
+    search_jql = jql or populate_config.get("search") or DEFAULT_POPULATE_JQL
+
+    # Resolve env: CLI override > config > default
+    search_env = env or jira_config.get("env", "prod")
+
+    # Create adapter and search
+    adapter = JiraAdapter(jira_config, base_path)
+
+    print(f"Searching Jira: {search_jql}")
+    tracked_items = adapter.search_issues(jql=search_jql, env=search_env)
+    print(f"Found {len(tracked_items)} issue(s)")
+
+    # Build set of issue keys from search results
+    search_keys = {item.id for item in tracked_items}
+
+    # Separate existing items into manual and populate buckets
+    existing_items = jira_config.get("items", []) or []
+    manual_items = []
+    for item in existing_items:
+        if item.get("source") != "populate":
+            manual_items.append(item)
+
+    # Build set of manual issue keys so we don't duplicate them
+    manual_keys = {item["issue"] for item in manual_items}
+
+    # Build new populate items from search results (skip any that exist as manual)
+    new_populate_items = []
+    for item in tracked_items:
+        if item.id not in manual_keys:
+            new_populate_items.append(
+                {
+                    "issue": item.id,
+                    "env": item.metadata.get("env", search_env),
+                    "source": "populate",
+                }
+            )
+
+    # Final items list: manual items first, then populate items
+    final_items = manual_items + new_populate_items
+
+    save_config(base_path, final_items)
+
+    added = [i["issue"] for i in new_populate_items]
+    if added:
+        print("\nUpdated gameplan.yaml with:")
+        for key in added:
+            print(f"  - {key}")
+    else:
+        print("\nNo new items to add")
+
+    print("\n✓ Populate complete!")
