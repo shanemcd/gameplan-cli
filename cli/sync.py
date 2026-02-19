@@ -84,8 +84,9 @@ def sync_jira(base_path: Path) -> None:
     for item in tracked_items:
         print(f"  Checking {item.id}...")
 
-        # Get the readme path first to load previous metadata
-        readme_path = adapter.get_storage_path(item, title=None)
+        # Find existing README by searching for {issue_key}-* directories
+        existing_readme = adapter.find_readme_path(item)
+        readme_path = existing_readme or adapter.get_storage_path(item, title=None)
 
         # Fetch data from Jira
         data = adapter.fetch_item_data(item)
@@ -113,12 +114,19 @@ def sync_jira(base_path: Path) -> None:
         else:
             print(f"    ✓ Status: {data.status} | Assignee: {assignee}")
 
-        # Update the README.md with new status (pass title for directory naming)
-        readme_path = adapter.get_storage_path(item, title=data.title)
-        adapter.update_readme(readme_path, data, item)
+        # Get the desired path based on current title
+        new_readme_path = adapter.get_storage_path(item, title=data.title)
+
+        # Handle directory rename if Jira title changed
+        if existing_readme and existing_readme.parent != new_readme_path.parent:
+            print(f"    📁 Title changed, renaming directory")
+            existing_readme.parent.rename(new_readme_path.parent)
+
+        # Update the README.md with new status
+        adapter.update_readme(new_readme_path, data, item)
 
         # Save metadata for next sync
-        adapter.save_metadata(readme_path, data)
+        adapter.save_metadata(new_readme_path, data)
 
     print("\n✓ Jira sync complete!")
 

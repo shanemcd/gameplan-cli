@@ -251,6 +251,138 @@ areas:
         mock_adapter.update_readme.assert_not_called()
 
 
+    @patch("cli.sync.JiraAdapter")
+    def test_sync_jira_renames_directory_on_title_change(self, mock_adapter_class, temp_dir, capsys):
+        """sync_jira renames directory when Jira title changes."""
+        config_file = temp_dir / "gameplan.yaml"
+        config_file.write_text("""
+areas:
+  jira:
+    items:
+      - issue: PROJ-123
+        env: prod
+""")
+
+        # Create existing directory with old title
+        old_dir = temp_dir / "tracking/areas/jira/PROJ-123-old-title"
+        old_dir.mkdir(parents=True)
+        old_readme = old_dir / "README.md"
+        old_readme.write_text("---\ntitle: Old Title\n---\n# My notes\n")
+        old_metadata = old_dir / ".metadata.json"
+        old_metadata.write_text('{"last_sync": "2026-01-01"}')
+
+        mock_adapter = MagicMock()
+        mock_adapter.load_config.return_value = [
+            TrackedItem(
+                id="PROJ-123", adapter="jira", metadata={"issue": "PROJ-123", "env": "prod"}
+            )
+        ]
+        mock_adapter.fetch_item_data.return_value = ItemData(
+            title="New Title",
+            status="In Progress",
+            updates=[],
+            raw_data={"fields": {"assignee": {"displayName": "testuser"}}},
+        )
+        # find_readme_path returns the existing README at the old path
+        mock_adapter.find_readme_path.return_value = old_readme
+        # get_storage_path returns the new path based on new title
+        new_dir = temp_dir / "tracking/areas/jira/PROJ-123-new-title"
+        mock_adapter.get_storage_path.return_value = new_dir / "README.md"
+        mock_adapter.detect_changes.return_value = False
+        mock_adapter_class.return_value = mock_adapter
+
+        sync_jira(temp_dir)
+
+        # Old directory should be renamed to new directory
+        assert not old_dir.exists(), "Old directory should no longer exist"
+        assert new_dir.exists(), "New directory should exist after rename"
+        # Content should be preserved
+        assert (new_dir / "README.md").exists()
+        assert "My notes" in (new_dir / "README.md").read_text()
+        assert (new_dir / ".metadata.json").exists()
+
+        captured = capsys.readouterr()
+        assert "Title changed, renaming directory" in captured.out
+
+    @patch("cli.sync.JiraAdapter")
+    def test_sync_jira_no_rename_when_title_unchanged(self, mock_adapter_class, temp_dir, capsys):
+        """sync_jira does not rename when title hasn't changed."""
+        config_file = temp_dir / "gameplan.yaml"
+        config_file.write_text("""
+areas:
+  jira:
+    items:
+      - issue: PROJ-123
+        env: prod
+""")
+
+        existing_dir = temp_dir / "tracking/areas/jira/PROJ-123-same-title"
+        existing_dir.mkdir(parents=True)
+        existing_readme = existing_dir / "README.md"
+        existing_readme.write_text("---\ntitle: Same Title\n---\n")
+
+        mock_adapter = MagicMock()
+        mock_adapter.load_config.return_value = [
+            TrackedItem(
+                id="PROJ-123", adapter="jira", metadata={"issue": "PROJ-123", "env": "prod"}
+            )
+        ]
+        mock_adapter.fetch_item_data.return_value = ItemData(
+            title="Same Title",
+            status="Open",
+            updates=[],
+            raw_data={"fields": {"assignee": {"displayName": "testuser"}}},
+        )
+        # Both paths point to the same directory
+        mock_adapter.find_readme_path.return_value = existing_readme
+        mock_adapter.get_storage_path.return_value = existing_readme
+        mock_adapter.detect_changes.return_value = False
+        mock_adapter_class.return_value = mock_adapter
+
+        sync_jira(temp_dir)
+
+        captured = capsys.readouterr()
+        assert "Title changed" not in captured.out
+
+    @patch("cli.sync.JiraAdapter")
+    def test_sync_jira_uses_existing_path_for_detect_changes(self, mock_adapter_class, temp_dir):
+        """sync_jira uses find_readme_path result for detect_changes, not key-only path."""
+        config_file = temp_dir / "gameplan.yaml"
+        config_file.write_text("""
+areas:
+  jira:
+    items:
+      - issue: PROJ-123
+        env: prod
+""")
+
+        existing_readme = temp_dir / "tracking/areas/jira/PROJ-123-my-issue/README.md"
+
+        mock_adapter = MagicMock()
+        mock_adapter.load_config.return_value = [
+            TrackedItem(
+                id="PROJ-123", adapter="jira", metadata={"issue": "PROJ-123", "env": "prod"}
+            )
+        ]
+        mock_adapter.fetch_item_data.return_value = ItemData(
+            title="My Issue",
+            status="Open",
+            updates=[],
+            raw_data={"fields": {"assignee": {"displayName": "testuser"}}},
+        )
+        mock_adapter.find_readme_path.return_value = existing_readme
+        mock_adapter.get_storage_path.return_value = existing_readme
+        mock_adapter.detect_changes.return_value = False
+        mock_adapter_class.return_value = mock_adapter
+
+        sync_jira(temp_dir)
+
+        # detect_changes should be called with the found path, not the key-only path
+        mock_adapter.detect_changes.assert_called_once_with(
+            existing_readme, mock_adapter.fetch_item_data.return_value
+        )
+
+
 class TestSaveConfig:
     """Tests for saving gameplan.yaml configuration."""
 
