@@ -273,15 +273,13 @@ areas:
 
         mock_adapter = MagicMock()
         mock_adapter.load_config.return_value = [
-            TrackedItem(
-                id="PROJ-123", adapter="jira", metadata={"issue": "PROJ-123", "env": "prod"}
-            )
+            TrackedItem(id="PROJ-123", adapter="jira", metadata={"issue": "PROJ-123", "env": "prod"})
         ]
         mock_adapter.fetch_item_data.return_value = ItemData(
             title="New Title",
             status="In Progress",
             updates=[],
-            raw_data={"fields": {"assignee": {"displayName": "testuser"}}},
+            raw_data={"fields": {"assignee": {"displayName": "testuser"}}}
         )
         # find_readme_path returns the existing README at the old path
         mock_adapter.find_readme_path.return_value = old_readme
@@ -323,15 +321,13 @@ areas:
 
         mock_adapter = MagicMock()
         mock_adapter.load_config.return_value = [
-            TrackedItem(
-                id="PROJ-123", adapter="jira", metadata={"issue": "PROJ-123", "env": "prod"}
-            )
+            TrackedItem(id="PROJ-123", adapter="jira", metadata={"issue": "PROJ-123", "env": "prod"})
         ]
         mock_adapter.fetch_item_data.return_value = ItemData(
             title="Same Title",
             status="Open",
             updates=[],
-            raw_data={"fields": {"assignee": {"displayName": "testuser"}}},
+            raw_data={"fields": {"assignee": {"displayName": "testuser"}}}
         )
         # Both paths point to the same directory
         mock_adapter.find_readme_path.return_value = existing_readme
@@ -360,15 +356,13 @@ areas:
 
         mock_adapter = MagicMock()
         mock_adapter.load_config.return_value = [
-            TrackedItem(
-                id="PROJ-123", adapter="jira", metadata={"issue": "PROJ-123", "env": "prod"}
-            )
+            TrackedItem(id="PROJ-123", adapter="jira", metadata={"issue": "PROJ-123", "env": "prod"})
         ]
         mock_adapter.fetch_item_data.return_value = ItemData(
             title="My Issue",
             status="Open",
             updates=[],
-            raw_data={"fields": {"assignee": {"displayName": "testuser"}}},
+            raw_data={"fields": {"assignee": {"displayName": "testuser"}}}
         )
         mock_adapter.find_readme_path.return_value = existing_readme
         mock_adapter.get_storage_path.return_value = existing_readme
@@ -378,9 +372,7 @@ areas:
         sync_jira(temp_dir)
 
         # detect_changes should be called with the found path, not the key-only path
-        mock_adapter.detect_changes.assert_called_once_with(
-            existing_readme, mock_adapter.fetch_item_data.return_value
-        )
+        mock_adapter.detect_changes.assert_called_once_with(existing_readme, mock_adapter.fetch_item_data.return_value)
 
 
 class TestSaveConfig:

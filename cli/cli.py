@@ -1,11 +1,33 @@
 """Main CLI entry point for gameplan."""
 
 import argparse
+import logging
 import os
 import sys
 from pathlib import Path
 
 from cli import agenda, init, sync
+
+
+def configure_logging(verbose: bool = False):
+    """Configure logging.
+
+    Args:
+        verbose: If True, set level to DEBUG. Otherwise INFO.
+                 Can also be overridden via GAMEPLAN_LOG_LEVEL env var.
+    """
+    # Environment variable takes precedence if set
+    env_level = os.environ.get("GAMEPLAN_LOG_LEVEL")
+    if env_level:
+        level = getattr(logging, env_level.upper(), logging.INFO)
+    else:
+        level = logging.DEBUG if verbose else logging.INFO
+
+    logging.basicConfig(
+        level=level,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        datefmt="%H:%M:%S",
+    )
 
 
 def get_base_path() -> Path:
@@ -136,6 +158,11 @@ def main():
         description="Gameplan - Local-first work tracking CLI",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
+    parser.add_argument(
+        "-v", "--verbose",
+        action="store_true",
+        help="Enable debug logging",
+    )
 
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
@@ -204,6 +231,11 @@ def main():
         help="Sync activity feeds from external systems",
     )
     sync_parser.add_argument(
+        "-v", "--verbose",
+        action="store_true",
+        help="Enable debug logging",
+    )
+    sync_parser.add_argument(
         "source",
         nargs="?",
         choices=["jira"],
@@ -240,6 +272,9 @@ def main():
     populate_parser.set_defaults(func=cmd_jira)
 
     args = parser.parse_args()
+
+    # Configure logging based on -v flag
+    configure_logging(verbose=args.verbose)
 
     if not args.command:
         parser.print_help()

@@ -5,6 +5,7 @@ The Jira adapter integrates with Jira via the jirahhh CLI tool
 """
 
 import json
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -294,22 +295,26 @@ class TestJiraUpdateReadme:
         assert "Vibe Coder 1.z3r0" in content
         assert "Unassigned" not in content
 
-    def test_update_readme_is_idempotent(self, temp_dir):
+    @patch("cli.adapters.jira.datetime")
+    def test_update_readme_is_idempotent(self, mock_datetime, temp_dir):
         """update_readme can be run multiple times with same result."""
+        fixed_time = datetime(2026, 1, 15, 12, 0, 0)
+        mock_datetime.utcnow.return_value = fixed_time
+
         adapter = JiraAdapter({}, temp_dir)
         item = TrackedItem(id="PROJ-123", adapter="jira", metadata={})
         data = ItemData(title="Test Issue", status="In Progress", raw_data={"assignee": "johndoe"})
         readme_path = temp_dir / "README.md"
 
-        # First update
+        # First update (creates file)
         adapter.update_readme(readme_path, data, item)
         first_content = readme_path.read_text()
 
-        # Second update with same data
+        # Second update with same data (updates existing)
         adapter.update_readme(readme_path, data, item)
         second_content = readme_path.read_text()
 
-        # Should be identical (or at least not duplicate content)
+        # Should be identical
         assert first_content == second_content
 
     def test_update_readme_preserves_manual_content(self, temp_dir):
@@ -668,89 +673,8 @@ class TestJirahhhCustomCommand:
         assert call_args[0] == "./bin/jirahhh"
 
 
-class TestJiraActivityLog:
-    """Test Activity Log updates."""
-
-    def test_update_activity_log_with_no_comments(self, temp_dir):
-        """_update_activity_log shows placeholder if no comments."""
-        adapter = JiraAdapter({}, temp_dir)
-
-        content = """# PROJ-123: Test Issue
-
-**Status**: Open
-**Assignee**: unassigned
-
-## Overview
-Test
-
-## Activity Log
-
-Old activity here
-
-## Notes
-Notes here
-"""
-        data = ItemData(title="Test", status="Open", raw_data={"comments": {"comments": []}})
-
-        result = adapter._update_activity_log(content, data)
-
-        assert "## Activity Log" in result
-        assert "*(Auto-synced from Jira)*" in result
-        assert "Old activity here" not in result
-
-    def test_update_activity_log_with_comments(self, temp_dir):
-        """_update_activity_log populates with Jira comments."""
-        adapter = JiraAdapter({}, temp_dir)
-
-        content = """# PROJ-123: Test Issue
-
-**Status**: Open
-
-## Activity Log
-
-Placeholder
-
-## Notes
-Notes
-"""
-        data = ItemData(
-            title="Test",
-            status="Open",
-            raw_data={
-                "comments": {
-                    "comments": [
-                        {
-                            "author": {"displayName": "John Doe"},
-                            "created": "2025-01-15T10:00:00.000Z",
-                            "body": "This is a test comment",
-                        }
-                    ]
-                }
-            },
-        )
-
-        result = adapter._update_activity_log(content, data)
-
-        assert "John Doe" in result
-        assert "2025-01-15 10:00 UTC" in result
-        assert "This is a test comment" in result
-
-    def test_update_activity_log_returns_unchanged_if_no_section(self, temp_dir):
-        """_update_activity_log returns content unchanged if no Activity Log section."""
-        adapter = JiraAdapter({}, temp_dir)
-
-        content = """# PROJ-123: Test Issue
-
-**Status**: Open
-
-## Overview
-No activity log section
-"""
-        data = ItemData(title="Test", status="Open", raw_data={})
-
-        result = adapter._update_activity_log(content, data)
-
-        assert result == content
+class TestJiraMarkdownConversion:
+    """Test Jira markup to markdown conversion."""
 
     def test_convert_jira_to_markdown_without_pandoc(self, temp_dir, monkeypatch):
         """_convert_jira_to_markdown returns original text if pandoc unavailable."""

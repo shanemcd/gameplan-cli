@@ -445,26 +445,27 @@ areas:
         env: prod
 """)
 
-        # Create tracking file
+        # Create tracking file with frontmatter
         tracking_dir = temp_dir / "tracking/areas/jira/PROJ-123-test-issue"
         tracking_dir.mkdir(parents=True)
         readme = tracking_dir / "README.md"
-        readme.write_text("""# PROJ-123: Test Issue
-
-**Status**: In Progress
-**Assignee**: testuser
-
-## Overview
-Test content
+        readme.write_text("""---
+issue_key: PROJ-123
+title: Test Issue
+status: In Progress
+assignee: testuser
+---
+# PROJ-123: Test Issue
 """)
 
         result = format_tracked_items(temp_dir)
 
         assert "[PROJ-123] Test Issue" in result
-        assert "🟢 In Progress" in result
+        assert "**Status:** In Progress" in result
+        assert "Details →" in result
 
-    def test_format_tracked_items_preserves_actions_from_agenda(self, temp_dir):
-        """format_tracked_items preserves Actions subsection from AGENDA.md."""
+    def test_format_tracked_items_uses_slim_format(self, temp_dir):
+        """format_tracked_items outputs slim format with links to README."""
         from cli.agenda import format_tracked_items
 
         # Create config
@@ -477,44 +478,30 @@ areas:
         env: prod
 """)
 
-        # Create tracking file
+        # Create tracking file with frontmatter
         tracking_dir = temp_dir / "tracking/areas/jira/PROJ-123-test-issue"
         tracking_dir.mkdir(parents=True)
         readme = tracking_dir / "README.md"
-        readme.write_text("""# PROJ-123: Test Issue
-
-**Status**: In Progress
-**Assignee**: testuser
-""")
-
-        # Create AGENDA.md with Actions
-        agenda_file = temp_dir / "AGENDA.md"
-        agenda_file.write_text("""# Agenda
-
-## Tracked Items
-
-### [PROJ-123] Test Issue
-
-**PROJ-123** 🟢 In Progress
-
-#### Actions
-
-- [ ] Review PR
-- [ ] Update docs
-
-#### Notes
-
-Some notes here
+        readme.write_text("""---
+issue_key: PROJ-123
+title: Test Issue
+status: In Progress
+assignee: testuser
+---
+# PROJ-123: Test Issue
 """)
 
         result = format_tracked_items(temp_dir)
 
-        assert "- [ ] Review PR" in result
-        assert "- [ ] Update docs" in result
-        assert "Some notes here" in result
+        # Slim format should NOT have Actions/Notes subsections
+        assert "#### Actions" not in result
+        assert "#### Notes" not in result
+        assert "Add your next actions here" not in result
+        # Should have link to README
+        assert "tracking/areas/jira/PROJ-123-test-issue/README.md" in result
 
-    def test_format_tracked_items_handles_multiple_status_emojis(self, temp_dir):
-        """format_tracked_items uses correct emoji for each status."""
+    def test_format_tracked_items_handles_multiple_statuses(self, temp_dir):
+        """format_tracked_items shows correct status for each item."""
         from cli.agenda import format_tracked_items
 
         # Create config with multiple items
@@ -530,7 +517,7 @@ areas:
       - issue: PROJ-5
 """)
 
-        # Create tracking files with different statuses
+        # Create tracking files with frontmatter and different statuses
         for issue_num, status in [
             ("1", "In Progress"),
             ("2", "Refinement"),
@@ -541,19 +528,21 @@ areas:
             tracking_dir = temp_dir / f"tracking/areas/jira/PROJ-{issue_num}-issue"
             tracking_dir.mkdir(parents=True)
             readme = tracking_dir / "README.md"
-            readme.write_text(f"""# PROJ-{issue_num}: Issue
-
-**Status**: {status}
-**Assignee**: test
+            readme.write_text(f"""---
+issue_key: PROJ-{issue_num}
+title: Issue {issue_num}
+status: {status}
+---
+# PROJ-{issue_num}: Issue {issue_num}
 """)
 
         result = format_tracked_items(temp_dir)
 
-        assert "🟢 In Progress" in result
-        assert "❓ Refinement" in result
-        assert "⚪ To Do" in result
-        assert "✅ Done" in result
-        assert "🔴 Blocked" in result
+        assert "In Progress" in result
+        assert "Refinement" in result
+        assert "To Do" in result
+        assert "Done" in result
+        assert "Blocked" in result
 
 
 class TestExtractTrackedItemSubsections:

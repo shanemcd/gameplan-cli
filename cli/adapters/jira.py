@@ -11,13 +11,87 @@ Requirements:
 """
 
 import json
+import logging
+import os
 import re
 import subprocess
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
+
+import yaml
+
+logger = logging.getLogger(__name__)
 
 from cli.adapters.base import Adapter, ItemData, TrackedItem, sanitize_title_for_path
+
+
+# Custom YAML representer to force double-quoted strings for multiline content
+# This prevents PyYAML from using literal block style which creates odd formatting
+def _str_representer(dumper: yaml.Dumper, data: str) -> yaml.ScalarNode:
+    """Custom string representer that uses double quotes for multiline strings."""
+    if '\n' in data:
+        # Force double-quoted style for multiline strings
+        return dumper.represent_scalar('tag:yaml.org,2002:str', data, style='"')
+    return dumper.represent_scalar('tag:yaml.org,2002:str', data)
+
+
+# Create a custom dumper class with our representer
+class _FrontmatterDumper(yaml.SafeDumper):
+    pass
+
+
+_FrontmatterDumper.add_representer(str, _str_representer)
+
+
+def parse_frontmatter(content: str) -> Tuple[Dict[str, Any], str]:
+    """Parse YAML frontmatter from markdown content.
+
+    Args:
+        content: Markdown content with optional YAML frontmatter
+
+    Returns:
+        Tuple of (frontmatter dict, body content)
+    """
+    if not content.startswith("---"):
+        return {}, content
+
+    # Find the closing ---
+    end_match = re.search(r"\n---\s*\n", content[3:])
+    if not end_match:
+        return {}, content
+
+    frontmatter_str = content[4:end_match.start() + 3]
+    body = content[end_match.end() + 3:]
+
+    try:
+        frontmatter = yaml.safe_load(frontmatter_str) or {}
+    except yaml.YAMLError:
+        return {}, content
+
+    return frontmatter, body
+
+
+def build_frontmatter(data: Dict[str, Any]) -> str:
+    """Build YAML frontmatter string.
+
+    Args:
+        data: Dictionary to serialize as YAML
+
+    Returns:
+        Frontmatter string with --- delimiters
+    """
+    # Use custom dumper that forces double-quoted strings for multiline content
+    # and width=inf to prevent line wrapping
+    yaml_str = yaml.dump(
+        data,
+        Dumper=_FrontmatterDumper,
+        default_flow_style=False,
+        allow_unicode=True,
+        sort_keys=False,
+        width=float("inf"),
+    )
+    return f"---\n{yaml_str}---\n"
 
 try:
     import pypandoc
@@ -110,7 +184,9 @@ class JiraAdapter(Adapter):
 
         return tracked_items
 
-    def fetch_item_data(self, item: TrackedItem, since: Optional[str] = None) -> ItemData:
+    def fetch_item_data(
+        self, item: TrackedItem, since: Optional[str] = None
+    ) -> ItemData:
         """Fetch Jira issue data via jirahhh CLI.
 
         Args:
@@ -121,20 +197,28 @@ class JiraAdapter(Adapter):
             ItemData with title, status, and raw Jira data including comments
         """
         issue_key = item.metadata.get("issue") or item.id
-        env = item.metadata.get("env", "prod")
+        jira_env = item.metadata.get("env", "prod")
 
         # Call jirahhh API to get full issue data
         jirahhh_command = self._get_command("jirahhh")
-        cmd = [jirahhh_command, "api", "GET", f"/rest/api/2/issue/{issue_key}", "--env", env]
+        cmd = [jirahhh_command, "api", "GET", f"/rest/api/2/issue/{issue_key}", "--env", jira_env]
 
+        logger.debug("Executing: %s", " ".join(cmd))
+        # Propagate current log level to jirahhh subprocess
+        subprocess_env = os.environ.copy()
+        subprocess_env["JIRAHHH_LOG_LEVEL"] = logging.getLevelName(logger.getEffectiveLevel())
+        # Let stderr pass through so jirahhh debug logs are visible in real-time
         result = subprocess.run(
             cmd,
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=None,  # Inherit stderr - shows jirahhh logs in real-time
             text=True,
-            timeout=30,
+            env=subprocess_env,
         )
+        logger.debug("Command completed with return code %d", result.returncode)
 
         if result.returncode != 0:
+            logger.debug("Command stderr: %s", result.stderr)
             # Return empty data on error
             return ItemData(title="", status="", raw_data={})
 
@@ -160,24 +244,20 @@ class JiraAdapter(Adapter):
             status = jira_data.get("status", "")
 
         # Fetch comments
-        comments_cmd = [
-            jirahhh_command,
-            "api",
-            "GET",
-            f"/rest/api/2/issue/{issue_key}/comment",
-            "--env",
-            env,
-        ]
+        comments_cmd = [jirahhh_command, "api", "GET", f"/rest/api/2/issue/{issue_key}/comment", "--env", jira_env]
 
+        logger.debug("Executing: %s", " ".join(comments_cmd))
         comments_result = subprocess.run(
             comments_cmd,
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=None,  # Inherit stderr - shows jirahhh logs in real-time
             text=True,
-            timeout=30,
+            env=subprocess_env,
         )
+        logger.debug("Command completed with return code %d", comments_result.returncode)
 
         comments_data = {}
-        if comments_result.returncode == 0:
+        if comments_result and comments_result.returncode == 0:
             try:
                 comments_data = json.loads(comments_result.stdout)
             except json.JSONDecodeError:
@@ -246,8 +326,10 @@ class JiraAdapter(Adapter):
 
         readme_path.write_text(content)
 
-    def _create_new_readme(self, issue_key: str, data: ItemData, assignee: str) -> str:
-        """Create new README.md content.
+    def _create_new_readme(
+        self, issue_key: str, data: ItemData, assignee: str
+    ) -> str:
+        """Create new README.md content with YAML frontmatter.
 
         Args:
             issue_key: Jira issue key
@@ -255,24 +337,92 @@ class JiraAdapter(Adapter):
             assignee: Assignee name or "Unassigned"
 
         Returns:
-            README.md content
+            README.md content with frontmatter
         """
-        return f"""# {issue_key}: {data.title}
+        # Build frontmatter
+        frontmatter_data = self._build_frontmatter_data(issue_key, data, assignee)
+        frontmatter = build_frontmatter(frontmatter_data)
 
-**Status**: {data.status}
-**Assignee**: {assignee}
+        # Build body (manual content area)
+        body = f"""\
+# {issue_key}: {data.title}
 
 ## Overview
+
 [Add context about this issue here]
 
 ## Notes
+
 [Add notes, decisions, and important information here]
 """
+        return frontmatter + body
+
+    def _build_frontmatter_data(
+        self, issue_key: str, data: ItemData, assignee: str
+    ) -> Dict[str, Any]:
+        """Build frontmatter data dictionary from Jira data.
+
+        Args:
+            issue_key: Jira issue key
+            data: Item data from Jira
+            assignee: Assignee name
+
+        Returns:
+            Dictionary for YAML frontmatter
+        """
+        # Extract Jira URL from raw data if available
+        jira_url = f"https://issues.redhat.com/browse/{issue_key}"
+
+        frontmatter = {
+            "issue_key": issue_key,
+            "title": data.title,
+            "status": data.status,
+            "assignee": assignee,
+            "jira_url": jira_url,
+            "last_synced": datetime.utcnow().isoformat() + "Z",
+        }
+
+        # Add comments if present
+        comments_data = data.raw_data.get("comments", {})
+        all_comments = comments_data.get("comments", [])
+
+        if all_comments:
+            frontmatter["comments"] = []
+            for comment in all_comments:
+                author = comment.get("author", {})
+                author_name = author.get("displayName", "Unknown")
+                created = comment.get("created", "")
+                body = comment.get("body", "").strip()
+
+                # Convert Jira markup to markdown if possible
+                body = self._convert_jira_to_markdown(body)
+
+                # Normalize whitespace: strip trailing spaces from lines,
+                # remove blank-only lines, and collapse multiple blank lines.
+                # This prevents PyYAML from using literal block style which
+                # creates odd formatting with random newlines.
+                lines = []
+                for line in body.split('\n'):
+                    stripped = line.rstrip()
+                    lines.append(stripped)
+                body = '\n'.join(lines)
+                # Collapse 2+ consecutive newlines to 2 (one blank line max)
+                while '\n\n\n' in body:
+                    body = body.replace('\n\n\n', '\n\n')
+                body = body.strip()
+
+                frontmatter["comments"].append({
+                    "author": author_name,
+                    "date": created,
+                    "body": body,
+                })
+
+        return frontmatter
 
     def _update_existing_readme(self, content: str, data: ItemData, assignee: str) -> str:
         """Update existing README.md content.
 
-        Updates Title, Status, Assignee, and Activity Log while preserving manual content.
+        Updates only the YAML frontmatter while preserving all manual content.
 
         Args:
             content: Current README content
@@ -282,35 +432,17 @@ class JiraAdapter(Adapter):
         Returns:
             Updated README content
         """
-        # Update Title (h1 heading) - matches pattern: # ISSUE-KEY: Title
-        title_pattern = r"^#\s+[A-Z]+-\d+:\s+.*$"
-        issue_key_match = re.search(r"^#\s+([A-Z]+-\d+):", content, re.MULTILINE)
-        if issue_key_match:
-            issue_key = issue_key_match.group(1)
-            content = re.sub(
-                title_pattern, f"# {issue_key}: {data.title}", content, count=1, flags=re.MULTILINE
-            )
+        existing_frontmatter, body = parse_frontmatter(content)
 
-        # Update Status field
-        status_pattern = r"\*\*Status\*\*:\s*.*"
-        content = re.sub(
-            status_pattern,
-            f"**Status**: {data.status}",
-            content,
-        )
+        # Get issue_key from frontmatter, or extract from heading
+        issue_key = existing_frontmatter.get("issue_key")
+        if not issue_key or issue_key == "UNKNOWN":
+            match = re.search(r"^#\s+([A-Z]+-\d+):", body, re.MULTILINE)
+            issue_key = match.group(1) if match else "UNKNOWN"
 
-        # Update Assignee field
-        assignee_pattern = r"\*\*Assignee\*\*:\s*.*"
-        content = re.sub(
-            assignee_pattern,
-            f"**Assignee**: {assignee}",
-            content,
-        )
+        new_frontmatter_data = self._build_frontmatter_data(issue_key, data, assignee)
 
-        # Update Activity Log section with comments
-        content = self._update_activity_log(content, data)
-
-        return content
+        return build_frontmatter(new_frontmatter_data) + body
 
     def _convert_jira_to_markdown(self, jira_text: str) -> str:
         """Convert Jira wiki markup to markdown.
@@ -326,94 +458,13 @@ class JiraAdapter(Adapter):
 
         try:
             # Use pypandoc to convert from jira to gfm (GitHub-flavored markdown)
-            return pypandoc.convert_text(jira_text, "gfm", format="jira")
+            # --wrap=none prevents pandoc from inserting line breaks in the output
+            return pypandoc.convert_text(
+                jira_text, "gfm", format="jira", extra_args=["--wrap=none"]
+            )
         except Exception:
             # If conversion fails, return original text
             return jira_text
-
-    def _update_activity_log(self, content: str, data: ItemData) -> str:
-        """Update the Activity Log section with comments from Jira.
-
-        Args:
-            content: Current README content
-            data: ItemData with comments
-
-        Returns:
-            Updated content with Activity Log populated
-        """
-        # Find Activity Log section
-        activity_log_pattern = re.compile(
-            r"^## Activity Log\s*\n.*?(?=\n## |\Z)", re.MULTILINE | re.DOTALL
-        )
-
-        match = activity_log_pattern.search(content)
-        if not match:
-            # No Activity Log section found
-            return content
-
-        # Extract comments
-        comments_data = data.raw_data.get("comments", {})
-        all_comments = comments_data.get("comments", [])
-
-        if not all_comments:
-            # No comments, use placeholder
-            activity_log = "## Activity Log\n\n*(Auto-synced from Jira)*\n"
-        else:
-            # Build activity log with comments
-            activity_log = "## Activity Log\n\n*(Auto-synced from Jira)*\n\n"
-
-            # Reverse to show most recent first
-            for comment in reversed(all_comments):
-                author = comment.get("author", {})
-                author_name = author.get("displayName", "Unknown")
-                created = comment.get("created", "")
-                body = comment.get("body", "").strip()
-
-                # Convert Jira markup to markdown
-                body = self._convert_jira_to_markdown(body)
-
-                # Format timestamp
-                if created:
-                    try:
-                        dt = datetime.fromisoformat(created.replace("Z", "+00:00"))
-                        created = dt.strftime("%Y-%m-%d %H:%M UTC")
-                    except Exception:
-                        pass
-
-                # Add comment entry
-                activity_log += f"### {author_name} - {created}\n\n"
-                activity_log += f"{body}\n\n"
-                activity_log += "---\n\n"
-
-        # Replace the Activity Log section
-        return activity_log_pattern.sub(activity_log.rstrip() + "\n", content)
-
-    def find_readme_path(self, item: TrackedItem) -> Optional[Path]:
-        """Find the README.md path for a tracked item by searching on disk.
-
-        Searches for directories matching {issue_key}-* to find the existing
-        README regardless of what the title was when the directory was created.
-
-        Args:
-            item: The tracked item
-
-        Returns:
-            Path to README.md or None if not found
-        """
-        issue_key = item.id
-        jira_dir = self.base_path / "tracking" / "areas" / "jira"
-
-        if not jira_dir.exists():
-            return None
-
-        # Look for directories matching the issue key pattern
-        for d in jira_dir.iterdir():
-            if d.is_dir() and d.name.startswith(f"{issue_key}-"):
-                readme = d / "README.md"
-                if readme.exists():
-                    return readme
-
-        return None
 
     def _get_metadata_path(self, readme_path: Path) -> Path:
         """Get the metadata file path for a given README path."""
@@ -490,3 +541,67 @@ class JiraAdapter(Adapter):
             and current_updated is not None
             and prev_updated != current_updated
         )
+
+    def format_agenda_item(self, item: TrackedItem) -> str:
+        """Format a Jira item for AGENDA.md in slim format.
+
+        Args:
+            item: The tracked item to format
+
+        Returns:
+            Markdown string with title, status, and link to README
+        """
+        issue_key = item.id
+
+        # Find the README for this item
+        readme_path = self.find_readme_path(item)
+        if not readme_path or not readme_path.exists():
+            return f"### [{issue_key}]\n**Status:** Unknown\n"
+
+        content = readme_path.read_text()
+        frontmatter, _ = parse_frontmatter(content)
+
+        title = frontmatter.get("title", "")
+        status = frontmatter.get("status", "Unknown")
+
+        # Build relative path from base
+        relative_path = str(readme_path.relative_to(self.base_path))
+
+        # Build output
+        lines = []
+        if title:
+            lines.append(f"### [{issue_key}] {title}")
+        else:
+            lines.append(f"### [{issue_key}]")
+        lines.append(f"**Status:** {status}")
+        lines.append(f"- [Details →]({relative_path})")
+        lines.append("")
+
+        return "\n".join(lines)
+
+    def find_readme_path(self, item: TrackedItem) -> Optional[Path]:
+        """Find the README.md path for a tracked item by searching on disk.
+
+        Searches for directories matching {issue_key}-* to find the existing
+        README regardless of what the title was when the directory was created.
+
+        Args:
+            item: The tracked item
+
+        Returns:
+            Path to README.md or None if not found
+        """
+        issue_key = item.id
+        jira_dir = self.base_path / "tracking" / "areas" / "jira"
+
+        if not jira_dir.exists():
+            return None
+
+        for item_dir in jira_dir.iterdir():
+            if item_dir.is_dir() and item_dir.name.startswith(f"{issue_key}-"):
+                readme = item_dir / "README.md"
+                if readme.exists():
+                    return readme
+
+        return None
+

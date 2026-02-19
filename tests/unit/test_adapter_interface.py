@@ -134,6 +134,9 @@ class TestAdapterInterface:
             def update_readme(self, readme_path, data, item):
                 pass
 
+            def format_agenda_item(self, item):
+                return ""
+
         adapter = MinimalAdapter({}, temp_dir)
         assert adapter.config == {}
         assert adapter.base_path == temp_dir
@@ -156,6 +159,9 @@ class TestAdapterInterface:
 
             def update_readme(self, readme_path, data, item):
                 pass
+
+            def format_agenda_item(self, item):
+                return ""
 
         adapter = TestAdapter({}, temp_dir)
         assert adapter.get_adapter_name() == "test"
@@ -182,6 +188,9 @@ class TestAdapterInterface:
 
             def update_readme(self, readme_path, data, item):
                 pass
+
+            def format_agenda_item(self, item):
+                return ""
 
         adapter = TestAdapter({}, temp_dir)
         config = {"items": [{"id": "TEST-1"}, {"id": "TEST-2"}]}
@@ -214,6 +223,9 @@ class TestAdapterInterface:
             def update_readme(self, readme_path, data, item):
                 pass
 
+            def format_agenda_item(self, item):
+                return ""
+
         adapter = TestAdapter({}, temp_dir)
         item = TrackedItem(id="TEST-123", adapter="test")
         data = adapter.fetch_item_data(item, since="2025-10-01")
@@ -241,6 +253,9 @@ class TestAdapterInterface:
             def update_readme(self, readme_path, data, item):
                 pass
 
+            def format_agenda_item(self, item):
+                return ""
+
         adapter = TestAdapter({}, temp_dir)
         item = TrackedItem(id="TEST-456", adapter="test")
         path = adapter.get_storage_path(item)
@@ -266,6 +281,9 @@ class TestAdapterInterface:
             def update_readme(self, readme_path, data, item):
                 readme_path.parent.mkdir(parents=True, exist_ok=True)
                 readme_path.write_text(f"# {data.title}\nStatus: {data.status}")
+
+            def format_agenda_item(self, item):
+                return ""
 
         adapter = TestAdapter({}, temp_dir)
         item = TrackedItem(id="TEST-789", adapter="test")
@@ -298,6 +316,9 @@ class TestAdapterCommand:
             def update_readme(self, readme_path, data, item):
                 pass
 
+            def format_agenda_item(self, item):
+                return ""
+
         adapter = TestAdapter({}, temp_dir)
         command = adapter._get_command("mycli")
 
@@ -317,6 +338,9 @@ class TestAdapterCommand:
                 return self.base_path / "README.md"
             def update_readme(self, readme_path, data, item):
                 pass
+
+            def format_agenda_item(self, item):
+                return ""
 
         config = {"command": "/custom/path/to/mycli"}
         adapter = TestAdapter(config, temp_dir)
@@ -339,6 +363,9 @@ class TestAdapterCommand:
             def update_readme(self, readme_path, data, item):
                 pass
 
+            def format_agenda_item(self, item):
+                return ""
+
         config = {"command": "./bin/mycli"}
         adapter = TestAdapter(config, temp_dir)
         command = adapter._get_command("mycli")
@@ -359,6 +386,9 @@ class TestAdapterCommand:
                 return self.base_path / "README.md"
             def update_readme(self, readme_path, data, item):
                 pass
+
+            def format_agenda_item(self, item):
+                return ""
 
         config = {"command": "/usr/local/bin/custom-tool"}
         adapter = TestAdapter(config, temp_dir)
@@ -382,6 +412,9 @@ class TestAdapterCommand:
                 return self.base_path / "README.md"
             def update_readme(self, readme_path, data, item):
                 pass
+
+            def format_agenda_item(self, item):
+                return ""
 
         adapter = TestAdapter({}, temp_dir)
         command = adapter._get_command("tool")

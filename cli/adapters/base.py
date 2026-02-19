@@ -213,3 +213,21 @@ class Adapter(ABC):
             Preserve all manual content (Overview, Notes, etc.)
         """
         pass
+
+    @abstractmethod
+    def format_agenda_item(self, item: TrackedItem) -> str:
+        """Format a tracked item for display in AGENDA.md.
+
+        Each adapter defines its own format. The default slim format is:
+            ### [ISSUE-KEY] Title
+            **Status:** 🟢 In Progress | **Next:** [action]
+            - [summary line]
+            - [Details →](path/to/README.md)
+
+        Args:
+            item: The tracked item to format
+
+        Returns:
+            Markdown string for the agenda
+        """
+        pass
