@@ -388,6 +388,33 @@ class JiraAdapter(Adapter):
         # Replace the Activity Log section
         return activity_log_pattern.sub(activity_log.rstrip() + "\n", content)
 
+    def find_readme_path(self, item: TrackedItem) -> Optional[Path]:
+        """Find the README.md path for a tracked item by searching on disk.
+
+        Searches for directories matching {issue_key}-* to find the existing
+        README regardless of what the title was when the directory was created.
+
+        Args:
+            item: The tracked item
+
+        Returns:
+            Path to README.md or None if not found
+        """
+        issue_key = item.id
+        jira_dir = self.base_path / "tracking" / "areas" / "jira"
+
+        if not jira_dir.exists():
+            return None
+
+        # Look for directories matching the issue key pattern
+        for d in jira_dir.iterdir():
+            if d.is_dir() and d.name.startswith(f"{issue_key}-"):
+                readme = d / "README.md"
+                if readme.exists():
+                    return readme
+
+        return None
+
     def _get_metadata_path(self, readme_path: Path) -> Path:
         """Get the metadata file path for a given README path."""
         return readme_path.parent / ".metadata.json"
