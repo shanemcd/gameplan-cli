@@ -266,7 +266,7 @@ wheels = [
 [[package]]
 name = "jirahhh"
 version = "0.1.0"
-source = { git = "https://github.com/shanemcd/jirahhh#d323c2f6a7006b2574be24b2339332db44b0e368" }
+source = { git = "https://github.com/shanemcd/jirahhh#d2fe98096ef00f5dd352dd462ca59c27e7470c3a" }
 dependencies = [
     { name = "jira" },
     { name = "pypandoc" },
