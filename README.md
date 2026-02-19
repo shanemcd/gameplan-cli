@@ -15,7 +15,7 @@
 - 🏠 **Local-first**: All data in markdown files, version controlled with git
 - 🔌 **Pluggable adapters**: Easy integration with any tracking system
 - 📅 **Smart agenda**: Configurable daily agenda with command-driven sections
-- 🧪 **Test-driven**: 194 tests with 91% coverage (exceeds 85% target)
+- 🧪 **Test-driven**: TDD from the start
 - 📝 **Markdown-based**: Human-readable, greppable, no vendor lock-in
 - 🤖 **AI-friendly**: Comprehensive documentation for AI assistants
 
@@ -374,7 +374,7 @@ See **[CONTRIBUTING.md](CONTRIBUTING.md)** for detailed guidelines.
 - ✅ Rich tracked items formatting with status emojis
 - ✅ CLI integration with full command routing
 - ✅ Comprehensive documentation (README, ARCHITECTURE, CONTRIBUTING)
-- ✅ 194 tests, 91% coverage (exceeds 85% target)
+- ✅ Comprehensive test suite
 
 ### Next Steps (Phase 7) ⏳
 
