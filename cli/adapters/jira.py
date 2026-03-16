@@ -370,8 +370,18 @@ class JiraAdapter(Adapter):
         Returns:
             Dictionary for YAML frontmatter
         """
-        # Extract Jira URL from raw data if available
-        jira_url = f"https://issues.redhat.com/browse/{issue_key}"
+        # Derive browse URL from the API's self link
+        self_url = data.raw_data.get("self", "")
+        if self_url:
+            # self is like https://redhat.atlassian.net/rest/api/2/issue/5181354
+            base_url = self_url.split("/rest/")[0]
+            jira_url = f"{base_url}/browse/{issue_key}"
+        else:
+            raise ValueError(
+                f"Cannot determine Jira base URL for {issue_key}: "
+                "API response missing 'self' field. "
+                "Ensure your jirahhh config has the correct URL for this environment."
+            )
 
         frontmatter = {
             "issue_key": issue_key,
