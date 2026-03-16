@@ -237,7 +237,7 @@ class TestJiraUpdateReadme:
         item = TrackedItem(
             id="PROJ-123", adapter="jira", metadata={"issue": "PROJ-123", "env": "prod"}
         )
-        data = ItemData(title="Test Issue", status="In Progress", raw_data={"assignee": "johndoe"})
+        data = ItemData(title="Test Issue", status="In Progress", raw_data={"self": "https://jira.example.com/rest/api/2/issue/123", "assignee": "johndoe"})
         readme_path = temp_dir / "README.md"
 
         adapter.update_readme(readme_path, data, item)
@@ -251,7 +251,7 @@ class TestJiraUpdateReadme:
         """update_readme includes status field."""
         adapter = JiraAdapter({}, temp_dir)
         item = TrackedItem(id="PROJ-123", adapter="jira", metadata={})
-        data = ItemData(title="Test Issue", status="In Progress", raw_data={"assignee": "johndoe"})
+        data = ItemData(title="Test Issue", status="In Progress", raw_data={"self": "https://jira.example.com/rest/api/2/issue/123", "assignee": "johndoe"})
         readme_path = temp_dir / "README.md"
 
         adapter.update_readme(readme_path, data, item)
@@ -267,7 +267,7 @@ class TestJiraUpdateReadme:
         data = ItemData(
             title="Test Issue",
             status="Open",
-            raw_data={"fields": {"assignee": {"displayName": "johndoe"}}},
+            raw_data={"self": "https://jira.example.com/rest/api/2/issue/123", "fields": {"assignee": {"displayName": "johndoe"}}},
         )
         readme_path = temp_dir / "README.md"
 
@@ -284,7 +284,7 @@ class TestJiraUpdateReadme:
         data = ItemData(
             title="Test Issue",
             status="Open",
-            raw_data={"fields": {"assignee": {"displayName": "Vibe Coder 1.z3r0"}}},
+            raw_data={"self": "https://jira.example.com/rest/api/2/issue/123", "fields": {"assignee": {"displayName": "Vibe Coder 1.z3r0"}}},
         )
         readme_path = temp_dir / "README.md"
 
@@ -303,7 +303,7 @@ class TestJiraUpdateReadme:
 
         adapter = JiraAdapter({}, temp_dir)
         item = TrackedItem(id="PROJ-123", adapter="jira", metadata={})
-        data = ItemData(title="Test Issue", status="In Progress", raw_data={"assignee": "johndoe"})
+        data = ItemData(title="Test Issue", status="In Progress", raw_data={"self": "https://jira.example.com/rest/api/2/issue/123", "assignee": "johndoe"})
         readme_path = temp_dir / "README.md"
 
         # First update (creates file)
@@ -342,7 +342,7 @@ This is manually written context that should be preserved.
         data = ItemData(
             title="Test Issue",
             status="In Progress",
-            raw_data={"fields": {"assignee": {"displayName": "johndoe"}}},
+            raw_data={"self": "https://jira.example.com/rest/api/2/issue/123", "fields": {"assignee": {"displayName": "johndoe"}}},
         )
         adapter.update_readme(readme_path, data, item)
 
