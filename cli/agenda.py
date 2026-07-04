@@ -180,21 +180,30 @@ def _generate_agenda_content(agenda_config: Dict[str, Any]) -> str:
 def _update_date_header(content: str) -> str:
     """Update the date header in AGENDA.md to today's date.
 
+    Supports two formats:
+    - '# Agenda - Monday, January 01, 2026'
+    - '**📅 2026-01-01 Monday**' (inside Focus & Priorities section)
+
     Args:
         content: Current AGENDA.md content
 
     Returns:
         Updated content with today's date
     """
-    today = datetime.now().strftime("%A, %B %d, %Y")
-    new_header = f"# Agenda - {today}"
+    now = datetime.now()
+    today_long = now.strftime("%A, %B %d, %Y")
+    today_iso = now.strftime("%Y-%m-%d")
+    today_day = now.strftime("%A")
 
-    # Pattern to match: # Agenda - [any date]
-    pattern = r"^# Agenda - .*$"
+    # Format 1: # Agenda - [any date]
+    pattern1 = r"^# Agenda - .*$"
+    content = re.sub(pattern1, f"# Agenda - {today_long}", content, count=1, flags=re.MULTILINE)
 
-    updated = re.sub(pattern, new_header, content, count=1, flags=re.MULTILINE)
+    # Format 2: **📅 YYYY-MM-DD DayOfWeek** (bold date line in Focus & Priorities)
+    pattern2 = r"^\*\*📅\s+\d{4}-\d{2}-\d{2}\s+\w+\*\*$"
+    content = re.sub(pattern2, f"**📅 {today_iso} {today_day}**", content, count=1, flags=re.MULTILINE)
 
-    return updated
+    return content
 
 
 def _reorder_sections(content: str, sections: List[Dict[str, Any]]) -> str:
