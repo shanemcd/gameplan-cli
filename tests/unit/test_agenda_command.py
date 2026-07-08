@@ -404,6 +404,135 @@ Manual content here
         updated_content = (temp_dir / "AGENDA.md").read_text()
         assert "[Error running command]" in updated_content or "Command failed" in updated_content
 
+    def test_refresh_skip_sections_skips_command(self, temp_dir, monkeypatch):
+        """Refresh with skip_sections skips running the command for that section."""
+        monkeypatch.chdir(temp_dir)
+
+        config = {
+            "agenda": {
+                "sections": [
+                    {"name": "Calendar", "command": "echo 'new calendar'"},
+                    {"name": "Slack Reminders", "command": "echo 'new reminders'"},
+                ]
+            }
+        }
+        config_file = temp_dir / "gameplan.yaml"
+        with open(config_file, "w") as f:
+            yaml.dump(config, f)
+
+        agenda_content = """# Agenda
+
+## Calendar
+old calendar content
+
+## Slack Reminders
+old reminders content
+"""
+        (temp_dir / "AGENDA.md").write_text(agenda_content)
+
+        refresh_agenda(skip_sections=["Slack Reminders"])
+
+        updated_content = (temp_dir / "AGENDA.md").read_text()
+        # Calendar should be refreshed
+        assert "new calendar" in updated_content
+        # Slack Reminders should retain old content
+        assert "old reminders content" in updated_content
+        assert "new reminders" not in updated_content
+
+    def test_refresh_skip_sections_case_insensitive(self, temp_dir, monkeypatch):
+        """Refresh skip_sections matching is case-insensitive."""
+        monkeypatch.chdir(temp_dir)
+
+        config = {
+            "agenda": {
+                "sections": [
+                    {"name": "Slack Reminders", "command": "echo 'updated'"},
+                ]
+            }
+        }
+        config_file = temp_dir / "gameplan.yaml"
+        with open(config_file, "w") as f:
+            yaml.dump(config, f)
+
+        agenda_content = """# Agenda
+
+## Slack Reminders
+original content
+"""
+        (temp_dir / "AGENDA.md").write_text(agenda_content)
+
+        refresh_agenda(skip_sections=["slack reminders"])
+
+        updated_content = (temp_dir / "AGENDA.md").read_text()
+        assert "original content" in updated_content
+        assert "updated" not in updated_content
+
+    def test_refresh_skip_sections_empty_list_skips_nothing(self, temp_dir, monkeypatch):
+        """Refresh with empty skip_sections list refreshes everything."""
+        monkeypatch.chdir(temp_dir)
+
+        config = {
+            "agenda": {
+                "sections": [
+                    {"name": "Time", "command": "echo 'current time'"},
+                ]
+            }
+        }
+        config_file = temp_dir / "gameplan.yaml"
+        with open(config_file, "w") as f:
+            yaml.dump(config, f)
+
+        agenda_content = """# Agenda
+
+## Time
+old time
+"""
+        (temp_dir / "AGENDA.md").write_text(agenda_content)
+
+        refresh_agenda(skip_sections=[])
+
+        updated_content = (temp_dir / "AGENDA.md").read_text()
+        assert "current time" in updated_content
+
+    def test_refresh_skip_multiple_sections(self, temp_dir, monkeypatch):
+        """Refresh can skip multiple sections at once."""
+        monkeypatch.chdir(temp_dir)
+
+        config = {
+            "agenda": {
+                "sections": [
+                    {"name": "Calendar", "command": "echo 'cal'"},
+                    {"name": "PRs", "command": "echo 'prs'"},
+                    {"name": "Reminders", "command": "echo 'rem'"},
+                ]
+            }
+        }
+        config_file = temp_dir / "gameplan.yaml"
+        with open(config_file, "w") as f:
+            yaml.dump(config, f)
+
+        agenda_content = """# Agenda
+
+## Calendar
+old cal
+
+## PRs
+old prs
+
+## Reminders
+old rem
+"""
+        (temp_dir / "AGENDA.md").write_text(agenda_content)
+
+        refresh_agenda(skip_sections=["Calendar", "Reminders"])
+
+        updated_content = (temp_dir / "AGENDA.md").read_text()
+        # Calendar and Reminders should keep old content
+        assert "old cal" in updated_content
+        assert "old rem" in updated_content
+        # PRs should be refreshed
+        assert "prs" in updated_content
+
 
 class TestFormatTrackedItems:
     """Test format_tracked_items function."""
