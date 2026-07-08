@@ -85,8 +85,12 @@ def cmd_agenda(args):
             content = agenda.view_agenda(base_path=base_path)
             print(content)
         elif args.agenda_command == "refresh":
-            agenda.refresh_agenda(base_path=base_path)
-            print("✅ Refreshed AGENDA.md")
+            skip = args.skip if hasattr(args, "skip") and args.skip else []
+            agenda.refresh_agenda(base_path=base_path, skip_sections=skip)
+            if skip:
+                print(f"✅ Refreshed AGENDA.md (skipped: {', '.join(skip)})")
+            else:
+                print("✅ Refreshed AGENDA.md")
         elif args.agenda_command == "tracked-items":
             output = agenda.format_tracked_items(base_path=base_path)
             print(output)
@@ -215,6 +219,12 @@ def main():
     refresh_parser = agenda_subparsers.add_parser(
         "refresh",
         help="Refresh command-driven sections in AGENDA.md",
+    )
+    refresh_parser.add_argument(
+        "--skip",
+        nargs="+",
+        metavar="SECTION",
+        help="Section names to skip during refresh (case-insensitive)",
     )
     refresh_parser.set_defaults(func=cmd_agenda)
 

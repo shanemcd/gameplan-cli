@@ -90,7 +90,10 @@ def view_agenda(base_path: Optional[Path] = None) -> str:
     return agenda_file.read_text()
 
 
-def refresh_agenda(base_path: Optional[Path] = None) -> Path:
+def refresh_agenda(
+    base_path: Optional[Path] = None,
+    skip_sections: Optional[List[str]] = None,
+) -> Path:
     """Refresh command-driven sections in AGENDA.md.
 
     Runs configured commands and updates their sections while preserving
@@ -99,6 +102,9 @@ def refresh_agenda(base_path: Optional[Path] = None) -> Path:
 
     Args:
         base_path: Base directory (default: current directory)
+        skip_sections: Optional list of section names to skip during refresh.
+            Matched case-insensitively against section names in gameplan.yaml.
+            Skipped sections retain their existing content in AGENDA.md.
 
     Returns:
         Path to updated AGENDA.md
@@ -108,6 +114,12 @@ def refresh_agenda(base_path: Optional[Path] = None) -> Path:
     """
     if base_path is None:
         base_path = Path.cwd()
+
+    if skip_sections is None:
+        skip_sections = []
+
+    # Normalize skip list for case-insensitive matching
+    skip_lower = [s.lower() for s in skip_sections]
 
     # Load config
     config_file = base_path / "gameplan.yaml"
@@ -144,9 +156,11 @@ def refresh_agenda(base_path: Optional[Path] = None) -> Path:
     # Reorder sections to match config order (preserving content)
     content = _reorder_sections(content, sections)
 
-    # Update command-driven sections
+    # Update command-driven sections (skip any in the skip list)
     for section in sections:
         if "command" in section:
+            if section["name"].lower() in skip_lower:
+                continue
             content = _update_command_section(content, section, base_path)
 
     # Write updated content
