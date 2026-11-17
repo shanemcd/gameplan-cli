@@ -222,7 +222,7 @@ class MiscAdapter(Adapter):
         title = frontmatter.get("title", title)
         status = frontmatter.get("status", "Active")
 
-        relative_path = str(readme_path.relative_to(self.base_path))
+        relative_path = self.agenda_link(readme_path)
 
         lines = []
         lines.append(f"### {title}")

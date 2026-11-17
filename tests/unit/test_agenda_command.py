@@ -314,6 +314,51 @@ class TestRefreshAgenda:
         # Command output should be added
         assert "Now" in updated_content
 
+    def test_refresh_preserves_undeclared_sections(self, temp_dir, monkeypatch):
+        """Refresh keeps sections that gameplan.yaml does not declare.
+
+        Sections like the Communication Tracker are hand-maintained and not
+        listed in config; refresh must not silently drop them.
+        """
+        monkeypatch.chdir(temp_dir)
+
+        config = {
+            "agenda": {
+                "sections": [
+                    {"name": "Focus", "description": "Focus items"},
+                    {"name": "Time", "command": "echo 'Now'"}
+                ]
+            }
+        }
+        config_file = temp_dir / "gameplan.yaml"
+        with open(config_file, "w") as f:
+            yaml.dump(config, f)
+
+        agenda_content = """# Agenda
+
+## Focus
+- Complete important task
+
+## Communication Tracker
+
+| Initiative | Status |
+|------------|--------|
+| **VME AI Working Group** | Active |
+
+## Time
+[Run: echo 'Now']
+"""
+        (temp_dir / "AGENDA.md").write_text(agenda_content)
+
+        refresh_agenda()
+
+        updated_content = (temp_dir / "AGENDA.md").read_text()
+        assert "## Communication Tracker" in updated_content
+        assert "**VME AI Working Group** | Active" in updated_content
+        # Declared sections survive and keep their order relative to each other
+        assert updated_content.index("## Focus") < updated_content.index("## Time")
+        assert "Now" in updated_content
+
     def test_refresh_handles_multiple_command_sections(self, temp_dir, monkeypatch):
         """Refresh updates multiple command-driven sections."""
         monkeypatch.chdir(temp_dir)

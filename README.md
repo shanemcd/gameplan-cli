@@ -138,6 +138,35 @@ gameplan jira populate            # Uses default or configured JQL
 gameplan jira populate --jql "project = MYPROJ" --env staging
 ```
 
+### Use a custom agenda file (including Rodger pages)
+
+Configuration and tracking remain rooted in the current workspace (or
+`GAMEPLAN_BASE_DIR`). Choose the agenda independently with `--path`:
+
+```bash
+gameplan agenda init --path "agenda/README.md"
+gameplan agenda view --path "agenda/README.md"
+gameplan agenda refresh --path "agenda/README.md"
+```
+
+Relative paths resolve against the workspace base directory; absolute paths
+are also supported. The default remains `AGENDA.md`. Init creates missing
+parent directories but refuses to overwrite an existing file. For an existing
+Rodger page, use view/refresh rather than init. Refresh preserves leading YAML
+frontmatter verbatim and processes completed tasks from the selected agenda,
+while keeping `LOGBOOK.md`, configuration, and command working directories at
+the workspace root. Generated tracked-item links are relative to the selected
+agenda file, not the workspace root. Refresh passes that location to nested
+`gameplan agenda tracked-items` commands; standalone formatting also accepts
+`gameplan agenda tracked-items --path "agenda/README.md"`. The CLI writes directly to disk: save pending editor
+drafts before refreshing and reload the page afterward.
+
+For an editable development installation:
+
+```bash
+uv tool install -e ~/github/shanemcd/gameplan-cli/
+```
+
 ### Example Workflow
 
 ```bash

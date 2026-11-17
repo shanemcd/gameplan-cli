@@ -74,25 +74,29 @@ def cmd_agenda(args):
         base_path = get_base_path()
 
         if args.agenda_command == "init":
-            agenda.init_agenda(base_path=base_path)
-            print("✅ Created AGENDA.md")
+            target = agenda.init_agenda(base_path=base_path, agenda_path=getattr(args, "path", None))
+            print(f"✅ Created {target}")
             print()
             print("📋 Next steps:")
             print("   1. Edit AGENDA.md to add your focus items")
             print("   2. Run: gameplan agenda refresh (to update command sections)")
             print("   3. Run: gameplan agenda view (to display)")
         elif args.agenda_command == "view":
-            content = agenda.view_agenda(base_path=base_path)
+            content = agenda.view_agenda(base_path=base_path, agenda_path=getattr(args, "path", None))
             print(content)
         elif args.agenda_command == "refresh":
             skip = args.skip if hasattr(args, "skip") and args.skip else []
-            agenda.refresh_agenda(base_path=base_path, skip_sections=skip)
+            target = agenda.refresh_agenda(
+                base_path=base_path,
+                skip_sections=skip,
+                agenda_path=getattr(args, "path", None),
+            )
             if skip:
-                print(f"✅ Refreshed AGENDA.md (skipped: {', '.join(skip)})")
+                print(f"✅ Refreshed {target} (skipped: {', '.join(skip)})")
             else:
-                print("✅ Refreshed AGENDA.md")
+                print(f"✅ Refreshed {target}")
         elif args.agenda_command == "tracked-items":
-            output = agenda.format_tracked_items(base_path=base_path)
+            output = agenda.format_tracked_items(base_path=base_path, agenda_path=getattr(args, "path", None) or os.environ.get("GAMEPLAN_AGENDA_PATH"))
             print(output)
         else:
             print("Unknown agenda command", file=sys.stderr)
@@ -206,6 +210,10 @@ def main():
         "init",
         help="Create AGENDA.md from gameplan.yaml",
     )
+    init_agenda_parser.add_argument(
+        "--path", type=Path,
+        help="Agenda file (default: AGENDA.md); relative to the workspace base directory",
+    )
     init_agenda_parser.set_defaults(func=cmd_agenda)
 
     # agenda view
@@ -213,12 +221,20 @@ def main():
         "view",
         help="View current AGENDA.md",
     )
+    view_parser.add_argument(
+        "--path", type=Path,
+        help="Agenda file (default: AGENDA.md); relative to the workspace base directory",
+    )
     view_parser.set_defaults(func=cmd_agenda)
 
     # agenda refresh
     refresh_parser = agenda_subparsers.add_parser(
         "refresh",
         help="Refresh command-driven sections in AGENDA.md",
+    )
+    refresh_parser.add_argument(
+        "--path", type=Path,
+        help="Agenda file (default: AGENDA.md); relative to the workspace base directory",
     )
     refresh_parser.add_argument(
         "--skip",
@@ -232,6 +248,10 @@ def main():
     tracked_items_parser = agenda_subparsers.add_parser(
         "tracked-items",
         help="Format tracked items from gameplan.yaml",
+    )
+    tracked_items_parser.add_argument(
+        "--path", type=Path,
+        help="Agenda file for relative links (default: AGENDA.md, or refresh context)",
     )
     tracked_items_parser.set_defaults(func=cmd_agenda)
 
