@@ -575,7 +575,7 @@ class JiraAdapter(Adapter):
         status = frontmatter.get("status", "Unknown")
 
         # Build relative path from base
-        relative_path = str(readme_path.relative_to(self.base_path))
+        relative_path = self.agenda_link(readme_path)
 
         # Build output
         lines = []

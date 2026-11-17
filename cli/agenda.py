@@ -14,7 +14,23 @@ from typing import Dict, Any, List, Optional, Tuple
 import yaml
 
 
-def init_agenda(base_path: Optional[Path] = None) -> Path:
+def _agenda_file(base_path: Path, agenda_path: Optional[Path]) -> Path:
+    """Resolve a relative agenda path against the workspace, not the config's location."""
+    path = Path(agenda_path) if agenda_path is not None else Path("AGENDA.md")
+    return path if path.is_absolute() else base_path / path
+
+
+def _split_frontmatter(content: str) -> Tuple[str, str]:
+    """Keep a leading YAML frontmatter block opaque and byte-for-byte intact."""
+    match = re.match(r"\A---\r?\n.*?^---(?:\r?\n|\Z)", content, re.DOTALL | re.MULTILINE)
+    if match:
+        return content[:match.end()], content[match.end():]
+    if content.startswith(("---\n", "---\r\n")):
+        raise ValueError("Unterminated agenda frontmatter; refusing to modify it.")
+    return "", content
+
+
+def init_agenda(base_path: Optional[Path] = None, agenda_path: Optional[Path] = None) -> Path:
     """Initialize AGENDA.md from gameplan.yaml configuration.
 
     Args:
@@ -49,10 +65,10 @@ def init_agenda(base_path: Optional[Path] = None) -> Path:
         )
 
     # Check if AGENDA.md already exists
-    agenda_file = base_path / "AGENDA.md"
+    agenda_file = _agenda_file(base_path, agenda_path)
     if agenda_file.exists():
         raise FileExistsError(
-            f"AGENDA.md already exists at {base_path}. "
+            f"{agenda_file} already exists. "
             "Use 'gameplan agenda refresh' to update it."
         )
 
@@ -60,12 +76,13 @@ def init_agenda(base_path: Optional[Path] = None) -> Path:
     content = _generate_agenda_content(config["agenda"])
 
     # Write AGENDA.md
-    agenda_file.write_text(content)
+    agenda_file.parent.mkdir(parents=True, exist_ok=True)
+    agenda_file.write_bytes(content.encode("utf-8"))
 
     return agenda_file
 
 
-def view_agenda(base_path: Optional[Path] = None) -> str:
+def view_agenda(base_path: Optional[Path] = None, agenda_path: Optional[Path] = None) -> str:
     """View current AGENDA.md content.
 
     Args:
@@ -80,19 +97,20 @@ def view_agenda(base_path: Optional[Path] = None) -> str:
     if base_path is None:
         base_path = Path.cwd()
 
-    agenda_file = base_path / "AGENDA.md"
+    agenda_file = _agenda_file(base_path, agenda_path)
     if not agenda_file.exists():
         raise FileNotFoundError(
-            f"AGENDA.md not found at {base_path}. "
+            f"{agenda_file} not found. "
             "Run 'gameplan agenda init' first."
         )
 
-    return agenda_file.read_text()
+    return agenda_file.read_bytes().decode("utf-8")
 
 
 def refresh_agenda(
     base_path: Optional[Path] = None,
     skip_sections: Optional[List[str]] = None,
+    agenda_path: Optional[Path] = None,
 ) -> Path:
     """Refresh command-driven sections in AGENDA.md.
 
@@ -105,6 +123,7 @@ def refresh_agenda(
         skip_sections: Optional list of section names to skip during refresh.
             Matched case-insensitively against section names in gameplan.yaml.
             Skipped sections retain their existing content in AGENDA.md.
+        agenda_path: Agenda file to refresh (default: AGENDA.md under base_path)
 
     Returns:
         Path to updated AGENDA.md
@@ -133,19 +152,19 @@ def refresh_agenda(
         config = yaml.safe_load(f)
 
     # Load current AGENDA.md
-    agenda_file = base_path / "AGENDA.md"
+    agenda_file = _agenda_file(base_path, agenda_path)
     if not agenda_file.exists():
         raise FileNotFoundError(
-            f"AGENDA.md not found at {base_path}. "
+            f"{agenda_file} not found. "
             "Run 'gameplan agenda init' first."
         )
 
     # Process logbook FIRST (before other updates)
     # This extracts completed tasks, logs them, and removes from agenda
-    process_logbook(base_path)
+    process_logbook(base_path, agenda_path=agenda_file)
 
     # Re-read content after logbook processing
-    content = agenda_file.read_text()
+    frontmatter, content = _split_frontmatter(agenda_file.read_bytes().decode("utf-8"))
 
     # Update date header to today
     content = _update_date_header(content)
@@ -161,10 +180,10 @@ def refresh_agenda(
         if "command" in section:
             if section["name"].lower() in skip_lower:
                 continue
-            content = _update_command_section(content, section, base_path)
+            content = _update_command_section(content, section, base_path, agenda_path=agenda_file)
 
     # Write updated content
-    agenda_file.write_text(content)
+    agenda_file.write_bytes((frontmatter + content).encode("utf-8"))
 
     return agenda_file
 
@@ -255,25 +274,49 @@ def _reorder_sections(content: str, sections: List[Dict[str, Any]]) -> str:
     # Build new content in config order
     new_sections = []
 
-    for section in sections:
-        name = section["name"]
+    def _header_for(section: Dict[str, Any]) -> str:
         emoji = section.get("emoji", "")
+        return f"## {emoji} {section['name']}" if emoji else f"## {section['name']}"
 
-        if emoji:
-            expected_header = f"## {emoji} {name}"
+    declared_headers = [_header_for(section) for section in sections]
+    consumed_headers = {h for h in declared_headers if h in existing_sections}
+
+    # Sections not declared in gameplan.yaml (manual sections such as the
+    # Communication Tracker) are preserved in place: each one stays attached to
+    # the declared section it followed in the original document, instead of
+    # being silently dropped or dumped at the end of the file.
+    # existing_sections is built from re.finditer, so it holds document order.
+    leading_headers: List[str] = []
+    trailing_headers: Dict[str, List[str]] = {h: [] for h in consumed_headers}
+    last_declared = None
+    for section_header in existing_sections:
+        if section_header in consumed_headers:
+            last_declared = section_header
+        elif last_declared is None:
+            leading_headers.append(section_header)
         else:
-            expected_header = f"## {name}"
+            trailing_headers[last_declared].append(section_header)
+
+    def _emit(section_header: str) -> None:
+        new_sections.append(f"{section_header}\n{existing_sections[section_header]}")
+
+    for section_header in leading_headers:
+        _emit(section_header)
+
+    for section in sections:
+        expected_header = _header_for(section)
 
         if expected_header in existing_sections:
-            # Use existing content
-            new_sections.append(f"{expected_header}\n{existing_sections[expected_header]}")
+            _emit(expected_header)
+            for undeclared in trailing_headers.get(expected_header, []):
+                _emit(undeclared)
         else:
             # Create new section with placeholder
             section_lines = _generate_section(section)
             new_sections.append("\n".join(section_lines))
 
-    # Reassemble: header + sections
-    result = header + "\n".join(new_sections)
+    # Reassemble: header + sections, separated by a blank line
+    result = header + "\n\n".join(new_sections)
 
     # Ensure trailing newline
     if not result.endswith("\n"):
@@ -314,7 +357,7 @@ def _generate_section(section: Dict[str, Any]) -> List[str]:
     return lines
 
 
-def _update_command_section(content: str, section: Dict[str, Any], base_path: Path) -> str:
+def _update_command_section(content: str, section: Dict[str, Any], base_path: Path, agenda_path: Optional[Path] = None) -> str:
     """Update a command-driven section with command output.
 
     Args:
@@ -343,7 +386,8 @@ def _update_command_section(content: str, section: Dict[str, Any], base_path: Pa
     try:
         import os
         env = os.environ.copy()
-        env["GAMEPLAN_BASE_DIR"] = str(base_path)
+        env["GAMEPLAN_BASE_DIR"] = str(base_path.resolve())
+        env["GAMEPLAN_AGENDA_PATH"] = str(_agenda_file(base_path, agenda_path).resolve())
 
         result = subprocess.run(
             command,
@@ -381,7 +425,7 @@ def _update_command_section(content: str, section: Dict[str, Any], base_path: Pa
     return updated
 
 
-def format_tracked_items(base_path: Optional[Path] = None) -> str:
+def format_tracked_items(base_path: Optional[Path] = None, agenda_path: Optional[Path] = None) -> str:
     """Format tracked items in slim format using adapters.
 
     Each adapter defines how its items are formatted for the agenda.
@@ -412,6 +456,7 @@ def format_tracked_items(base_path: Optional[Path] = None) -> str:
     jira_area = areas.get("jira", {})
     if jira_area:
         jira_adapter = JiraAdapter(jira_area, base_path)
+        jira_adapter.agenda_directory = _agenda_file(base_path, agenda_path).parent
         jira_items = jira_adapter.load_config(jira_area)
 
         for item in jira_items:
@@ -422,6 +467,7 @@ def format_tracked_items(base_path: Optional[Path] = None) -> str:
     misc_area = areas.get("misc", {})
     if misc_area:
         misc_adapter = MiscAdapter(misc_area, base_path)
+        misc_adapter.agenda_directory = _agenda_file(base_path, agenda_path).parent
         misc_items = misc_adapter.load_config(misc_area)
 
         for item in misc_items:
@@ -921,7 +967,7 @@ def remove_completed_tasks_from_content(
     return '\n'.join(filtered_lines)
 
 
-def process_logbook(base_path: Path) -> Tuple[int, int]:
+def process_logbook(base_path: Path, agenda_path: Optional[Path] = None) -> Tuple[int, int]:
     """Process completed tasks: extract, log to LOGBOOK.md, remove from AGENDA.md.
 
     This is the main entry point for logbook functionality. It:
@@ -936,11 +982,11 @@ def process_logbook(base_path: Path) -> Tuple[int, int]:
     Returns:
         Tuple of (total_tasks_logged, initiatives_logged)
     """
-    agenda_file = base_path / "AGENDA.md"
+    agenda_file = _agenda_file(base_path, agenda_path)
     if not agenda_file.exists():
         return (0, 0)
 
-    content = agenda_file.read_text()
+    frontmatter, content = _split_frontmatter(agenda_file.read_bytes().decode("utf-8"))
 
     # Extract completed tasks
     completed_tasks = extract_completed_tasks(content)
@@ -953,7 +999,7 @@ def process_logbook(base_path: Path) -> Tuple[int, int]:
     if logged_count > 0:
         # Remove from agenda
         updated_content = remove_completed_tasks_from_content(content, completed_tasks)
-        agenda_file.write_text(updated_content)
+        agenda_file.write_bytes((frontmatter + updated_content).encode("utf-8"))
         print(f"📓 Logged {logged_count} completed task(s) to LOGBOOK.md")
         print(f"🧹 Removed {logged_count} completed task(s) from AGENDA.md")
 

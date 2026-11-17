@@ -310,6 +310,11 @@ gameplan adapters list --available  # Show all available
 
 ---
 
+## Additional shipped improvements
+
+- [x] Independent `--path` for agenda init/view/refresh, with workspace-rooted
+  configuration/logbook and verbatim YAML frontmatter preservation for Rodger.
+
 ## Future Enhancements (Post-Release)
 
 ### Phase 8: Advanced Agenda Features

@@ -102,6 +102,14 @@ class Adapter(ABC):
         """
         self.config = config
         self.base_path = base_path
+        self.agenda_directory = base_path
+
+    def agenda_link(self, target: Path) -> str:
+        """Build a portable Markdown destination relative to the agenda file."""
+        import os
+        from urllib.parse import quote
+        relative = Path(os.path.relpath(target.resolve(), self.agenda_directory.resolve()))
+        return quote(relative.as_posix(), safe="/.-_~")
 
     def _get_command(self, command_name: str) -> str:
         """Get the command from config or default.
